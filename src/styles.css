@@ -1,0 +1,461 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ring-offset-background: var(--background);
+  --color-frost: var(--frost);
+  --color-ink2: var(--ink2);
+  --color-warn: var(--warn);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --font-display: "Archivo", sans-serif;
+  --font-body: "Space Grotesk", sans-serif;
+}
+
+/* =========================================================
+   DARK THEME (Default) - Electric Cyber Blue & Deep Navy
+   ========================================================= */
+:root,
+.dark,
+html[data-theme="dark"] {
+  --radius: 0.75rem;
+  /* Deep midnight electric navy canvas */
+  --background: #080c14;
+  --foreground: #f8fafc;
+  --card: rgba(15, 23, 42, 0.78);
+  --card-foreground: #f8fafc;
+  --popover: rgba(15, 23, 42, 0.96);
+  --popover-foreground: #f8fafc;
+  --primary: #38bdf8;
+  --primary-foreground: #020617;
+  --secondary: rgba(56, 189, 248, 0.12);
+  --secondary-foreground: #7dd3fc;
+  --muted: rgba(56, 189, 248, 0.08);
+  --muted-foreground: #94a3b8;
+  --accent: #00f2fe;
+  --accent-foreground: #020617;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --border: rgba(56, 189, 248, 0.22);
+  --input: rgba(56, 189, 248, 0.18);
+  --ring: #38bdf8;
+  /* custom tokens */
+  --frost: #94a3b8;
+  --ink2: rgba(15, 23, 42, 0.9);
+  --warn: #f59e0b;
+  --sidebar: rgba(11, 17, 33, 0.96);
+  --sidebar-foreground: #f8fafc;
+  --sidebar-primary: #38bdf8;
+  --sidebar-primary-foreground: #020617;
+  --sidebar-accent: rgba(56, 189, 248, 0.15);
+  --sidebar-accent-foreground: #f8fafc;
+  --sidebar-border: rgba(56, 189, 248, 0.22);
+  --sidebar-ring: #38bdf8;
+}
+
+/* =========================================================
+   LIGHT THEME - Arctic Sapphire & Sky Pearl
+   ========================================================= */
+.light,
+html[data-theme="light"] {
+  --radius: 0.75rem;
+  --background: #f0f9ff;
+  --foreground: #0f172a;
+  --card: rgba(255, 255, 255, 0.9);
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+  --primary: #0284c7;
+  --primary-foreground: #ffffff;
+  --secondary: #e0f2fe;
+  --secondary-foreground: #0369a1;
+  --muted: #f0f9ff;
+  --muted-foreground: #0284c7;
+  --accent: #0ea5e9;
+  --accent-foreground: #ffffff;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --border: rgba(14, 165, 233, 0.2);
+  --input: rgba(14, 165, 233, 0.15);
+  --ring: #0284c7;
+  /* custom tokens for light mode */
+  --frost: #0369a1;
+  --ink2: #f0f9ff;
+  --warn: #d97706;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #0f172a;
+  --sidebar-primary: #0284c7;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e0f2fe;
+  --sidebar-accent-foreground: #0f172a;
+  --sidebar-border: rgba(14, 165, 233, 0.2);
+  --sidebar-ring: #0284c7;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.15s ease;
+  }
+
+  body {
+    background-color: var(--color-background);
+    background-image: 
+      radial-gradient(ellipse 80% 60% at 15% 10%, rgba(14, 165, 233, 0.22) 0%, transparent 60%),
+      radial-gradient(ellipse 75% 55% at 85% 20%, rgba(99, 102, 241, 0.18) 0%, transparent 55%),
+      radial-gradient(ellipse 70% 60% at 50% 80%, rgba(6, 182, 212, 0.15) 0%, transparent 60%),
+      radial-gradient(ellipse 80% 60% at 80% 90%, rgba(56, 189, 248, 0.1) 0%, transparent 50%),
+      linear-gradient(180deg, #080c14 0%, #0f172a 50%, #080c14 100%);
+    background-attachment: fixed;
+    color: var(--color-foreground);
+    font-family: var(--font-body);
+    min-height: 100vh;
+  }
+
+  .light body,
+  html[data-theme="light"] body {
+    background-color: #f0f9ff;
+    background-image: 
+      radial-gradient(ellipse 80% 60% at 15% 10%, rgba(14, 165, 233, 0.2) 0%, transparent 60%),
+      radial-gradient(ellipse 75% 55% at 85% 20%, rgba(99, 102, 241, 0.16) 0%, transparent 55%),
+      radial-gradient(ellipse 70% 60% at 50% 80%, rgba(56, 189, 248, 0.18) 0%, transparent 60%),
+      radial-gradient(ellipse 80% 60% at 80% 90%, rgba(14, 165, 233, 0.12) 0%, transparent 50%),
+      linear-gradient(180deg, #f0f9ff 0%, #e0f2fe 50%, #f8fafc 100%);
+  }
+}
+
+/* Ambient kinetic background */
+.ambient-glow {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(120px);
+  pointer-events: none;
+}
+
+.glass-panel {
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(56, 189, 248, 0.22);
+  box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.6), 0 0 20px rgba(14, 165, 233, 0.1);
+}
+
+.light .glass-panel,
+html[data-theme="light"] .glass-panel {
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(14, 165, 233, 0.2);
+  box-shadow: 0 10px 30px -8px rgba(14, 165, 233, 0.12);
+}
+
+.glass-panel-subtle {
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(56, 189, 248, 0.16);
+  box-shadow: 0 6px 20px -6px rgba(0, 0, 0, 0.4);
+}
+
+.light .glass-panel-subtle,
+html[data-theme="light"] .glass-panel-subtle {
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(14, 165, 233, 0.15);
+  box-shadow: 0 4px 15px -3px rgba(14, 165, 233, 0.08);
+}
+
+.text-charge-gradient {
+  background: linear-gradient(90deg, #38bdf8 0%, #00f2fe 40%, #0ea5e9 80%, #67e8f9 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.light .text-charge-gradient,
+html[data-theme="light"] .text-charge-gradient {
+  background: linear-gradient(90deg, #0284c7 0%, #0ea5e9 50%, #6366f1 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.charge-button {
+  background: linear-gradient(135deg, #00f2fe 0%, #0ea5e9 45%, #0284c7 100%);
+  color: #ffffff;
+  font-weight: 800;
+  box-shadow: 0 4px 18px rgba(14, 165, 233, 0.4), 0 2px 8px rgba(2, 132, 199, 0.3);
+  border: 1px solid rgba(125, 211, 252, 0.4);
+}
+
+.light .charge-button,
+html[data-theme="light"] .charge-button {
+  background: linear-gradient(135deg, #0284c7 0%, #0ea5e9 50%, #06b6d4 100%);
+  color: #ffffff;
+  box-shadow: 0 4px 16px rgba(2, 132, 199, 0.35);
+  border: 1px solid rgba(14, 165, 233, 0.3);
+}
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 9999px;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  border: 1px solid color-mix(in oklab, var(--color-accent) 30%, transparent);
+  background: color-mix(in oklab, var(--color-accent) 10%, transparent);
+  color: var(--color-accent);
+}
+
+/* Leaflet map customizations */
+.leaflet-container {
+  font-family: var(--font-body) !important;
+  background: #0d0e17 !important;
+  outline: none;
+  width: 100%;
+  height: 100%;
+}
+
+.light .leaflet-container,
+html[data-theme="light"] .leaflet-container {
+  background: #e2e8f0 !important;
+}
+
+/* Free OpenStreetMap Dark Mode without any API keys or watermarks */
+.leaflet-tile-pane.dark-tile-mode .leaflet-tile,
+.dark .leaflet-tile-pane .leaflet-tile {
+  filter: brightness(0.65) invert(1) contrast(3.2) hue-rotate(200deg) saturate(0.35) brightness(0.75) !important;
+}
+
+.light .leaflet-tile-pane .leaflet-tile,
+.leaflet-tile-pane.light-tile-mode .leaflet-tile {
+  filter: none !important;
+}
+
+/* Satellite view should always remain unfiltered */
+.leaflet-tile-pane.satellite-mode .leaflet-tile {
+  filter: none !important;
+}
+
+.leaflet-popup-content-wrapper {
+  background: rgba(8, 18, 13, 0.96) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(0, 255, 135, 0.3) !important;
+  color: #f8fafc !important;
+  border-radius: 1rem !important;
+  box-shadow: 0 20px 35px -10px rgba(0, 0, 0, 0.7), 0 0 25px rgba(0, 255, 135, 0.2), 0 0 15px rgba(255, 0, 127, 0.15) !important;
+  padding: 0 !important;
+  overflow: hidden;
+}
+
+.light .leaflet-popup-content-wrapper,
+html[data-theme="light"] .leaflet-popup-content-wrapper {
+  background: rgba(255, 255, 255, 0.96) !important;
+  border: 1px solid rgba(16, 185, 129, 0.25) !important;
+  color: #064e3b !important;
+  box-shadow: 0 20px 35px -10px rgba(0, 0, 0, 0.15), 0 0 15px rgba(219, 39, 119, 0.1) !important;
+}
+
+.leaflet-popup-content {
+  margin: 0 !important;
+  line-height: 1.4 !important;
+}
+
+.leaflet-popup-tip {
+  background: rgba(8, 18, 13, 0.96) !important;
+  border: 1px solid rgba(0, 255, 135, 0.3) !important;
+}
+
+.light .leaflet-popup-tip,
+html[data-theme="light"] .leaflet-popup-tip {
+  background: rgba(255, 255, 255, 0.96) !important;
+  border: 1px solid rgba(15, 23, 42, 0.12) !important;
+}
+
+.leaflet-popup-close-button {
+  color: #94a3b8 !important;
+  padding: 6px 8px !important;
+  font-size: 18px !important;
+  z-index: 10;
+}
+
+.leaflet-popup-close-button:hover {
+  color: #ffffff !important;
+}
+
+.light .leaflet-popup-close-button:hover,
+html[data-theme="light"] .leaflet-popup-close-button:hover {
+  color: #0f172a !important;
+}
+
+/* Leaflet Zoom and Control styles */
+.leaflet-bar {
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 0.75rem !important;
+  overflow: hidden;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5) !important;
+}
+
+.light .leaflet-bar,
+html[data-theme="light"] .leaflet-bar {
+  border: 1px solid rgba(15, 23, 42, 0.12) !important;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08) !important;
+}
+
+.leaflet-bar a {
+  background-color: rgba(18, 20, 32, 0.9) !important;
+  backdrop-filter: blur(8px);
+  color: #e2e8f0 !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  transition: all 0.15s ease;
+}
+
+.light .leaflet-bar a,
+html[data-theme="light"] .leaflet-bar a {
+  background-color: rgba(255, 255, 255, 0.92) !important;
+  color: #1e293b !important;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08) !important;
+}
+
+.leaflet-bar a:hover {
+  background-color: rgba(30, 35, 55, 0.95) !important;
+  color: #38bdf8 !important;
+}
+
+.light .leaflet-bar a:hover,
+html[data-theme="light"] .leaflet-bar a:hover {
+  background-color: rgba(241, 245, 249, 0.95) !important;
+  color: #0284c7 !important;
+}
+
+.leaflet-bar a:last-child {
+  border-bottom: none !important;
+}
+
+/* Custom Marker Styles */
+.ev-marker-icon {
+  background: transparent;
+  border: none;
+}
+
+.ev-pin-pulse {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  animation: ev-pulse 2s cubic-bezier(0.24, 0, 0.38, 1) infinite;
+  opacity: 0.6;
+}
+
+@keyframes ev-pulse {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.8;
+  }
+  70% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.light .custom-scrollbar::-webkit-scrollbar-track,
+html[data-theme="light"] .custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.04);
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 9999px;
+}
+
+.light .custom-scrollbar::-webkit-scrollbar-thumb,
+html[data-theme="light"] .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(15, 23, 42, 0.18);
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.light .custom-scrollbar::-webkit-scrollbar-thumb:hover,
+html[data-theme="light"] .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(15, 23, 42, 0.3);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.2s ease-out forwards;
+}
+
+.animate-slideUp {
+  animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+
