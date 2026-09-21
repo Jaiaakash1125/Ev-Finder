@@ -1,0 +1,255 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "India EV Finder REST API",
+    "description": "Authenticated REST API for discovery, navigation, slot reservations, route planning, and vehicle management across EV charging stations in India.",
+    "version": "1.0.0",
+    "contact": {
+      "name": "EV Finder Mobile API Team",
+      "url": "https://github.com/Jaiaakash1125/Ev-Finder"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:5000/api/v1",
+      "description": "Local Development Server"
+    },
+    {
+      "url": "https://api.evfinder.in/api/v1",
+      "description": "Production Cloud Server"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Enter your JWT Bearer token obtained from `/auth/otp/verify`"
+      }
+    },
+    "schemas": {
+      "Station": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "network": { "type": "string" },
+          "city": { "type": "string" },
+          "state": { "type": "string" },
+          "address": { "type": "string" },
+          "pincode": { "type": "string" },
+          "lat": { "type": "number" },
+          "lng": { "type": "number" },
+          "distanceKm": { "type": "number" },
+          "status": { "type": "string", "enum": ["available", "limited", "busy", "offline"] },
+          "freePorts": { "type": "integer" },
+          "totalPorts": { "type": "integer" },
+          "connectors": { "type": "array", "items": { "type": "string" } },
+          "maxPowerKw": { "type": "integer" },
+          "pricePerKwh": { "type": "number" },
+          "hours": { "type": "string" },
+          "amenities": { "type": "array", "items": { "type": "string" } },
+          "rating": { "type": "number" },
+          "reviews": { "type": "integer" },
+          "isFavorite": { "type": "boolean" }
+        }
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "phone": { "type": "string" },
+          "email": { "type": "string" },
+          "fullName": { "type": "string" },
+          "avatarUrl": { "type": "string" },
+          "vehicles": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Vehicle" }
+          },
+          "favorites": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "Vehicle": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "brand": { "type": "string" },
+          "model": { "type": "string" },
+          "connectorType": { "type": "string" },
+          "batteryKwh": { "type": "number" },
+          "regNumber": { "type": "string" }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/auth/otp/send": {
+      "post": {
+        "summary": "Request SMS OTP for Mobile Login",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "phone": { "type": "string", "example": "+919876543210" }
+                },
+                "required": ["phone"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "OTP sent successfully" }
+        }
+      }
+    },
+    "/auth/otp/verify": {
+      "post": {
+        "summary": "Verify OTP & Generate JWT Tokens",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "phone": { "type": "string", "example": "+919876543210" },
+                  "otp": { "type": "string", "example": "123456" },
+                  "fullName": { "type": "string", "example": "Jai Aakash" }
+                },
+                "required": ["phone", "otp"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Authentication successful, returns tokens and user profile" }
+        }
+      }
+    },
+    "/stations/nearby": {
+      "get": {
+        "summary": "Find EV Charging Stations Near Coordinates",
+        "parameters": [
+          { "name": "lat", "in": "query", "schema": { "type": "number" }, "example": 12.9716 },
+          { "name": "lng", "in": "query", "schema": { "type": "number" }, "example": 77.5946 },
+          { "name": "radius_km", "in": "query", "schema": { "type": "number" }, "example": 25 },
+          { "name": "connector", "in": "query", "schema": { "type": "string" }, "example": "CCS2" },
+          { "name": "min_power_kw", "in": "query", "schema": { "type": "integer" }, "example": 50 },
+          { "name": "network", "in": "query", "schema": { "type": "string" }, "example": "Tata Power EZ Charge" }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of nearby stations sorted by distance",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "count": { "type": "integer" },
+                    "data": { "type": "array", "items": { "$ref": "#/components/schemas/Station" } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stations/bounds": {
+      "get": {
+        "summary": "Find EV Charging Stations in Map Viewport",
+        "parameters": [
+          { "name": "min_lat", "in": "query", "required": true, "schema": { "type": "number" } },
+          { "name": "min_lng", "in": "query", "required": true, "schema": { "type": "number" } },
+          { "name": "max_lat", "in": "query", "required": true, "schema": { "type": "number" } },
+          { "name": "max_lng", "in": "query", "required": true, "schema": { "type": "number" } }
+        ],
+        "responses": {
+          "200": { "description": "Stations within bounding box" }
+        }
+      }
+    },
+    "/stations/{id}": {
+      "get": {
+        "summary": "Get Single Station with Live Ports Telemetry",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Full station details with real-time port states" }
+        }
+      }
+    },
+    "/routes/plan": {
+      "post": {
+        "summary": "Smart EV Corridor & Trip Route Planner",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "origin": { "type": "object", "properties": { "lat": { "type": "number" }, "lng": { "type": "number" } } },
+                  "destination": { "type": "object", "properties": { "lat": { "type": "number" }, "lng": { "type": "number" } } },
+                  "vehicle": {
+                    "type": "object",
+                    "properties": {
+                      "batteryKwh": { "type": "number", "example": 40.5 },
+                      "currentSocPercent": { "type": "integer", "example": 65 },
+                      "efficiencyKmPerKwh": { "type": "number", "example": 6.5 }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Planned route with suggested EV charging stops" }
+        }
+      }
+    },
+    "/user/favorites": {
+      "get": {
+        "summary": "Get User Favorite Stations",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "User favorite stations" }
+        }
+      }
+    },
+    "/stations/{id}/reserve": {
+      "post": {
+        "summary": "Reserve a Charging Port Slot",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "portNumber": { "type": "integer", "example": 1 },
+                  "startTimeMinutesFromNow": { "type": "integer", "example": 15 },
+                  "durationMinutes": { "type": "integer", "example": 45 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Slot reserved successfully" }
+        }
+      }
+    }
+  }
+}
