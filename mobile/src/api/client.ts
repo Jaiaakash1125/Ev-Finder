@@ -10,7 +10,6 @@ export const XAMPP_API_URLS = [
   `http://${hostIp}/api/get_stations.php`,
   `http://${hostIp}/get_stations.php`,
   `http://localhost/api/get_stations.php`,
-  `http://localhost/get_stations.php`,
 ];
 
 export interface FetchStationsResult {
@@ -20,7 +19,7 @@ export interface FetchStationsResult {
   error?: string;
 }
 
-// Mapping of substrings/districts/aliases to clean major cities (1:1 identical to PC website)
+// Mapping of substrings/districts/aliases to clean major cities
 const CITY_NAME_MAP: [RegExp, string][] = [
   [/bengaluru|bangalore/i, "Bengaluru"],
   [/mumbai|bombay|navi mumbai|thane|borivali|andheri|nariman/i, "Mumbai"],
@@ -70,8 +69,8 @@ function getDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): 
   const dLon = (lon2 - lon1) * (Math.PI / 180);
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * (Math.PI / 180)) *
-      Math.cos(lat2 * (Math.PI / 180)) *
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
       Math.sin(dLon / 2) *
       Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
@@ -147,7 +146,6 @@ export function cleanCityName(
 
 /**
  * Normalizes raw SQL database records from XAMPP into standard Station objects
- * (1:1 identical to PC website src/lib/api.ts)
  */
 export function normalizeStation(raw: any): Station {
   let connectors: string[] = [];
@@ -207,14 +205,13 @@ export function normalizeStation(raw: any): Station {
 }
 
 /**
- * Fetches stations from the XAMPP PHP API backend on localhost / LAN,
- * exactly as done on the PC website in src/lib/api.ts
+ * Checks XAMPP server with fast timeout; falls back immediately if offline
  */
 export async function fetchStations(): Promise<FetchStationsResult> {
   for (const url of XAMPP_API_URLS) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3500);
+      const timeoutId = setTimeout(() => controller.abort(), 1200);
 
       const response = await fetch(url, {
         signal: controller.signal,
@@ -235,11 +232,11 @@ export async function fetchStations(): Promise<FetchStationsResult> {
         }
       }
     } catch {
-      // try next URL
+      // try next
     }
   }
 
-  // Fallback to local dataset (exact same fallback as PC website)
+  // Fallback to local dataset (exact same as PC website)
   return {
     data: fallbackStations,
     isLiveDb: false,

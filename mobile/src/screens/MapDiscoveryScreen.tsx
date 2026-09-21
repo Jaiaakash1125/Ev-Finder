@@ -12,6 +12,7 @@ import { Map, List } from "lucide-react-native";
 
 import { Station } from "../types";
 import { fetchStations } from "../api/client";
+import { stations as fallbackStations } from "../data/stations";
 import { colors, radius, spacing } from "../theme/theme";
 import { HeaderBar } from "../components/HeaderBar";
 import { FilterChipsBar } from "../components/FilterChipsBar";
@@ -20,13 +21,14 @@ import { StationDetailBottomSheet } from "../components/StationDetailBottomSheet
 import { LeafletMapView } from "../components/LeafletMapView";
 
 export const MapDiscoveryScreen: React.FC = () => {
-  const [allStations, setAllStations] = useState<Station[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  // Start with full dataset immediately so user never sees 0 stations
+  const [allStations, setAllStations] = useState<Station[]>(fallbackStations);
+  const [loading, setLoading] = useState<boolean>(false);
   const [isLiveDb, setIsLiveDb] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<"map" | "list">("map");
 
   // Filters State (1:1 identical to PC website)
-  const [searchQuery, setSearchQuery] = useState<string>("" );
+  const [searchQuery, setSearchQuery] = useState<string>("");
   const [selectedCity, setSelectedCity] = useState<string>("All India");
   const [onlyFastDc, setOnlyFastDc] = useState<boolean>(false);
   const [onlyAvailable, setOnlyAvailable] = useState<boolean>(false);
@@ -37,20 +39,19 @@ export const MapDiscoveryScreen: React.FC = () => {
   const [sheetVisible, setSheetVisible] = useState<boolean>(false);
 
   useEffect(() => {
-    loadStations();
+    loadLiveXamppStations();
   }, []);
 
-  const loadStations = async () => {
-    setLoading(true);
+  const loadLiveXamppStations = async () => {
     try {
-      // Calls XAMPP MySQL get_stations.php exactly like the PC website
+      // Tries to connect to live XAMPP MySQL backend on host
       const res = await fetchStations();
-      setAllStations(res.data || []);
-      setIsLiveDb(res.isLiveDb);
+      if (res.data && res.data.length > 0) {
+        setAllStations(res.data);
+        setIsLiveDb(res.isLiveDb);
+      }
     } catch (err) {
-      console.warn("Error loading stations:", err);
-    } finally {
-      setLoading(false);
+      console.warn("Using fallback dataset:", err);
     }
   };
 
