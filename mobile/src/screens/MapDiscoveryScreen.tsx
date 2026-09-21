@@ -244,7 +244,6 @@ export const MapDiscoveryScreen: React.FC = () => {
         station={selectedStation}
         visible={sheetVisible}
         onClose={() => setSheetVisible(false)}
-        onReserveSlot={(id) => api.reserveSlot(id)}
       />
     </View>
   );

@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   ScrollView,
   Modal,
-  Alert,
 } from "react-native";
 import * as Linking from "expo-linking";
 import {
@@ -16,11 +15,7 @@ import {
   MapPin,
   Copy,
   Clock,
-  CheckCircle,
-  Coffee,
-  Wifi,
-  ShieldCheck,
-  Calendar,
+  CheckCircle2,
 } from "lucide-react-native";
 import { Station } from "../types";
 import { colors, radius, spacing } from "../theme/theme";
@@ -29,17 +24,14 @@ interface StationDetailBottomSheetProps {
   station: Station | null;
   visible: boolean;
   onClose: () => void;
-  onReserveSlot?: (stationId: string) => void;
 }
 
 export const StationDetailBottomSheet: React.FC<StationDetailBottomSheetProps> = ({
   station,
   visible,
   onClose,
-  onReserveSlot,
 }) => {
   const [copied, setCopied] = useState(false);
-  const [reserved, setReserved] = useState(false);
 
   if (!station) return null;
 
@@ -50,19 +42,7 @@ export const StationDetailBottomSheet: React.FC<StationDetailBottomSheetProps> =
 
   const handleCopyCoords = () => {
     setCopied(true);
-    setTimeout(() => setCopied(false), 2500);
-  };
-
-  const handleReserve = () => {
-    if (onReserveSlot) {
-      onReserveSlot(station.id);
-    }
-    setReserved(true);
-    Alert.alert(
-      "Bay Reserved!",
-      `Charging slot at ${station.name} held for 15 minutes. Head over!`,
-      [{ text: "OK", onPress: () => setReserved(false) }]
-    );
+    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
@@ -71,9 +51,10 @@ export const StationDetailBottomSheet: React.FC<StationDetailBottomSheetProps> =
         <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose} />
 
         <View style={styles.sheetContainer}>
-          {/* Top Drag Handle & Header */}
+          {/* Top Drag Handle */}
           <View style={styles.dragHandle} />
 
+          {/* Network & City Header Bar */}
           <View style={styles.headerRow}>
             <View style={styles.networkTag}>
               <Text style={styles.networkText}>{station.network}</Text>
@@ -86,29 +67,39 @@ export const StationDetailBottomSheet: React.FC<StationDetailBottomSheetProps> =
           </View>
 
           <ScrollView style={styles.bodyScroll} showsVerticalScrollIndicator={false}>
-            {/* Title & Address */}
+            {/* Title & Full Address */}
             <Text style={styles.title}>{station.name}</Text>
             <View style={styles.addressRow}>
               <MapPin size={14} color={colors.foregroundSubtle} />
               <Text style={styles.addressText}>{station.address}</Text>
             </View>
 
-            {/* Big Action Buttons Row */}
+            {/* Big Action Buttons Row (Directions & Copy GPS) */}
             <View style={styles.actionButtonsRow}>
-              <TouchableOpacity style={styles.primaryNavBtn} onPress={handleOpenDirections} activeOpacity={0.85}>
-                <Navigation size={16} color="#020617" />
-                <Text style={styles.primaryNavText}>Get Directions ↗</Text>
+              <TouchableOpacity
+                style={styles.primaryNavBtn}
+                onPress={handleOpenDirections}
+                activeOpacity={0.85}
+              >
+                <Navigation size={18} color="#020617" />
+                <Text style={styles.primaryNavText}>Get Directions (Google Maps) ↗</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity style={styles.secondaryCopyBtn} onPress={handleCopyCoords} activeOpacity={0.85}>
-                <Copy size={14} color={colors.primary} />
+              <TouchableOpacity
+                style={styles.secondaryCopyBtn}
+                onPress={handleCopyCoords}
+                activeOpacity={0.85}
+              >
+                <Copy size={15} color={colors.primary} />
                 <Text style={styles.secondaryCopyText}>
-                  {copied ? "Copied!" : `GPS (${station.lat.toFixed(2)}, ${station.lng.toFixed(2)})`}
+                  {copied
+                    ? "✓ GPS Coords Copied!"
+                    : `Copy GPS (${station.lat.toFixed(4)}, ${station.lng.toFixed(4)})`}
                 </Text>
               </TouchableOpacity>
             </View>
 
-            {/* Metrics Grid */}
+            {/* Key Metrics Grid (Max Speed & Total Ports) */}
             <View style={styles.metricsGrid}>
               <View style={styles.metricCard}>
                 <Text style={styles.metricLabel}>MAX SPEED</Text>
@@ -116,55 +107,45 @@ export const StationDetailBottomSheet: React.FC<StationDetailBottomSheetProps> =
               </View>
 
               <View style={styles.metricCard}>
-                <Text style={styles.metricLabel}>AVAILABLE BAYS</Text>
-                <Text style={[styles.metricValue, { color: colors.success }]}>
-                  🔌 {station.freePorts} / {station.totalPorts} Free
+                <Text style={styles.metricLabel}>TOTAL CHARGING BAYS</Text>
+                <Text style={[styles.metricValue, { color: colors.accent }]}>
+                  🔌 {station.totalPorts} Ports
                 </Text>
-              </View>
-
-              <View style={styles.metricCard}>
-                <Text style={styles.metricLabel}>TARIFF</Text>
-                <Text style={styles.metricValue}>₹{station.pricePerKwh}/kWh</Text>
-              </View>
-
-              <View style={styles.metricCard}>
-                <Text style={styles.metricLabel}>HOURS</Text>
-                <Text style={styles.metricValue}>🕒 {station.hours || "24×7"}</Text>
               </View>
             </View>
 
-            {/* Connectors Section */}
+            {/* Supported Connectors */}
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Supported Connectors</Text>
               <View style={styles.connectorsRow}>
-                {station.connectors.map((conn, idx) => (
-                  <View key={idx} style={styles.connPill}>
+                {station.connectors.map((c) => (
+                  <View key={c} style={styles.connPill}>
                     <Zap size={13} color="#00f2fe" />
-                    <Text style={styles.connText}>{conn}</Text>
+                    <Text style={styles.connText}>{c}</Text>
                   </View>
                 ))}
               </View>
             </View>
 
-            {/* Amenities Section */}
-            {station.amenities && station.amenities.length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Station Amenities</Text>
-                <View style={styles.amenitiesRow}>
-                  {station.amenities.map((item, idx) => (
-                    <View key={idx} style={styles.amenityPill}>
-                      <Text style={styles.amenityText}>✨ {item}</Text>
-                    </View>
-                  ))}
-                </View>
+            {/* Location Details & Hours */}
+            <View style={styles.gridDetails}>
+              <View style={styles.detailBox}>
+                <Text style={styles.detailLabel}>CITY & STATE</Text>
+                <Text style={styles.detailValue}>
+                  📍 {station.city} {station.state ? `· ${station.state}` : ""}
+                </Text>
               </View>
-            )}
+              <View style={styles.detailBox}>
+                <Text style={styles.detailLabel}>OPERATING HOURS</Text>
+                <Text style={styles.detailValue}>🕒 {station.hours || "24×7"}</Text>
+              </View>
+            </View>
 
-            {/* Reserve Charging Bay CTA */}
-            <TouchableOpacity style={styles.reserveButton} onPress={handleReserve} activeOpacity={0.85}>
-              <Calendar size={18} color="#020617" />
-              <Text style={styles.reserveButtonText}>Reserve Charging Bay (Free)</Text>
-            </TouchableOpacity>
+            {/* Footer Verification Badge */}
+            <View style={styles.footerRow}>
+              <CheckCircle2 size={14} color={colors.success} />
+              <Text style={styles.footerText}>OpenStreetMap Verified Station</Text>
+            </View>
           </ScrollView>
         </View>
       </View>
@@ -251,12 +232,10 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   actionButtonsRow: {
-    flexDirection: "row",
-    gap: spacing.md,
+    gap: spacing.sm,
     marginBottom: spacing.lg,
   },
   primaryNavBtn: {
-    flex: 1.2,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -271,11 +250,10 @@ const styles = StyleSheet.create({
   },
   primaryNavText: {
     fontSize: 14,
-    fontWeight: "800",
+    fontWeight: "900",
     color: "#020617",
   },
   secondaryCopyBtn: {
-    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -283,7 +261,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.backgroundInput,
     borderWidth: 1,
     borderColor: colors.border,
-    paddingVertical: 14,
+    paddingVertical: 12,
     borderRadius: radius.lg,
   },
   secondaryCopyText: {
@@ -293,17 +271,17 @@ const styles = StyleSheet.create({
   },
   metricsGrid: {
     flexDirection: "row",
-    flexWrap: "wrap",
     gap: spacing.sm,
     marginBottom: spacing.lg,
   },
   metricCard: {
-    width: "48%",
+    flex: 1,
     backgroundColor: "rgba(56, 189, 248, 0.05)",
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     borderRadius: radius.md,
     padding: spacing.md,
+    alignItems: "center",
   },
   metricLabel: {
     fontSize: 9,
@@ -312,8 +290,8 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
   },
   metricValue: {
-    fontSize: 15,
-    fontWeight: "800",
+    fontSize: 16,
+    fontWeight: "900",
     color: colors.foreground,
     marginTop: 3,
   },
@@ -321,7 +299,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   sectionTitle: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "800",
     color: colors.frost,
     marginBottom: spacing.sm,
@@ -349,37 +327,42 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: colors.foreground,
   },
-  amenitiesRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
+  gridDetails: {
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
   },
-  amenityPill: {
-    backgroundColor: "rgba(255, 255, 255, 0.05)",
+  detailBox: {
+    backgroundColor: "rgba(255, 255, 255, 0.03)",
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: radius.sm,
+    padding: spacing.md,
+    borderRadius: radius.md,
   },
-  amenityText: {
-    fontSize: 12,
-    color: colors.foregroundMuted,
+  detailLabel: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: colors.foregroundSubtle,
+    letterSpacing: 0.5,
   },
-  reserveButton: {
+  detailValue: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: colors.foreground,
+    marginTop: 2,
+  },
+  footerRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    backgroundColor: colors.accent,
-    paddingVertical: 16,
-    borderRadius: radius.xl,
-    marginTop: spacing.sm,
-    marginBottom: spacing.xl,
+    gap: 6,
+    paddingVertical: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderSubtle,
+    marginBottom: spacing.lg,
   },
-  reserveButtonText: {
-    fontSize: 15,
-    fontWeight: "900",
-    color: "#020617",
+  footerText: {
+    fontSize: 12,
+    color: colors.frost,
+    fontWeight: "600",
   },
 });

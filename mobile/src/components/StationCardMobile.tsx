@@ -1,6 +1,6 @@
 import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
-import { Zap, MapPin, Navigation, Star, Heart } from "lucide-react-native";
+import { Zap, MapPin, Navigation } from "lucide-react-native";
 import { Station } from "../types";
 import { colors, radius, spacing } from "../theme/theme";
 
@@ -8,21 +8,16 @@ interface StationCardMobileProps {
   station: Station;
   onPress: () => void;
   onNavigate: () => void;
-  onToggleFavorite?: () => void;
 }
 
 export const StationCardMobile: React.FC<StationCardMobileProps> = ({
   station,
   onPress,
   onNavigate,
-  onToggleFavorite,
 }) => {
-  const isAvailable = station.status === "available";
-  const isLimited = station.status === "limited";
-
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.85}>
-      {/* Top Network & Favorite Row */}
+      {/* Network Badge */}
       <View style={styles.topRow}>
         <View style={styles.networkBadge}>
           <Zap size={12} color="#00f2fe" />
@@ -30,25 +25,7 @@ export const StationCardMobile: React.FC<StationCardMobileProps> = ({
             {station.network}
           </Text>
         </View>
-
-        <View style={styles.topRightRow}>
-          {station.rating > 0 && (
-            <View style={styles.ratingBadge}>
-              <Star size={11} color="#f59e0b" fill="#f59e0b" />
-              <Text style={styles.ratingText}>{station.rating.toFixed(1)}</Text>
-            </View>
-          )}
-
-          {onToggleFavorite && (
-            <TouchableOpacity onPress={onToggleFavorite} style={styles.favButton}>
-              <Heart
-                size={16}
-                color={station.isFavorite ? colors.destructive : colors.foregroundMuted}
-                fill={station.isFavorite ? colors.destructive : "transparent"}
-              />
-            </TouchableOpacity>
-          )}
-        </View>
+        <Text style={styles.cityText}>📍 {station.city}</Text>
       </View>
 
       {/* Station Name */}
@@ -56,44 +33,32 @@ export const StationCardMobile: React.FC<StationCardMobileProps> = ({
         {station.name}
       </Text>
 
-      {/* Address & City */}
+      {/* Address */}
       <View style={styles.addressRow}>
         <MapPin size={13} color={colors.foregroundSubtle} />
         <Text style={styles.addressText} numberOfLines={1}>
-          {station.city} • {station.address}
+          {station.address}
         </Text>
       </View>
 
-      {/* Stats Row: Power, Ports, Price */}
+      {/* Speed & Ports Metrics */}
       <View style={styles.statsRow}>
         <View style={styles.statItem}>
-          <Text style={styles.statLabel}>SPEED</Text>
+          <Text style={styles.statLabel}>MAX SPEED</Text>
           <Text style={styles.statValue}>⚡ {station.maxPowerKw} kW</Text>
         </View>
 
         <View style={styles.statDivider} />
 
         <View style={styles.statItem}>
-          <Text style={styles.statLabel}>BAYS FREE</Text>
-          <Text
-            style={[
-              styles.statValue,
-              { color: isAvailable ? colors.success : isLimited ? colors.warning : colors.destructive },
-            ]}
-          >
-            {station.freePorts} / {station.totalPorts}
+          <Text style={styles.statLabel}>CHARGING BAYS</Text>
+          <Text style={[styles.statValue, { color: colors.accent }]}>
+            🔌 {station.totalPorts} Ports
           </Text>
-        </View>
-
-        <View style={styles.statDivider} />
-
-        <View style={styles.statItem}>
-          <Text style={styles.statLabel}>TARIFF</Text>
-          <Text style={styles.statValue}>₹{station.pricePerKwh}/kWh</Text>
         </View>
       </View>
 
-      {/* Plugs & Navigation CTA Footer */}
+      {/* Connectors & Directions Button */}
       <View style={styles.footerRow}>
         <View style={styles.connectorTags}>
           {station.connectors.slice(0, 2).map((conn, idx) => (
@@ -105,7 +70,7 @@ export const StationCardMobile: React.FC<StationCardMobileProps> = ({
 
         <TouchableOpacity style={styles.navButton} onPress={onNavigate} activeOpacity={0.8}>
           <Navigation size={13} color="#020617" />
-          <Text style={styles.navButtonText}>Go ↗</Text>
+          <Text style={styles.navButtonText}>Directions ↗</Text>
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
@@ -142,7 +107,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: radius.full,
-    maxWidth: "65%",
+    maxWidth: "70%",
   },
   networkText: {
     fontSize: 10,
@@ -150,27 +115,10 @@ const styles = StyleSheet.create({
     color: colors.accent,
     textTransform: "uppercase",
   },
-  topRightRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  ratingBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 3,
-    backgroundColor: "rgba(245, 158, 11, 0.12)",
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: radius.full,
-  },
-  ratingText: {
+  cityText: {
     fontSize: 11,
-    fontWeight: "800",
-    color: colors.warning,
-  },
-  favButton: {
-    padding: 2,
+    color: colors.frost,
+    fontWeight: "600",
   },
   name: {
     fontSize: 16,
@@ -192,7 +140,7 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent: "space-around",
     backgroundColor: "rgba(56, 189, 248, 0.04)",
     borderRadius: radius.md,
     paddingVertical: spacing.sm,
@@ -249,13 +197,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 4,
     backgroundColor: colors.primary,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: radius.full,
   },
   navButtonText: {
-    fontSize: 12,
-    fontWeight: "800",
+    fontSize: 11,
+    fontWeight: "900",
     color: "#020617",
   },
 });
