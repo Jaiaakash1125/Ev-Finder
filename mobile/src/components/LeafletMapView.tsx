@@ -2,12 +2,13 @@ import React, { useRef, useEffect } from "react";
 import { StyleSheet, View, ActivityIndicator } from "react-native";
 import { WebView } from "react-native-webview";
 import { Station } from "../types";
-import { colors } from "../theme/theme";
+import { darkColors, lightColors } from "../theme/theme";
 
 interface LeafletMapViewProps {
   stations: Station[];
   selectedCity: string;
   onSelectStation: (station: Station) => void;
+  isDark?: boolean;
 }
 
 const CITY_COORDS: Record<string, { lat: number; lng: number; zoom: number }> = {
@@ -25,22 +26,23 @@ export const LeafletMapView: React.FC<LeafletMapViewProps> = ({
   stations,
   selectedCity,
   onSelectStation,
+  isDark = true,
 }) => {
   const webViewRef = useRef<WebView | null>(null);
+  const colors = isDark ? darkColors : lightColors;
 
-  // Update map markers and view when stations or city changes
+  // Update map markers, theme filter, and view when stations, city, or theme changes
   useEffect(() => {
     if (!webViewRef.current) return;
     const cityData = CITY_COORDS[selectedCity] || CITY_COORDS["All India"];
     
-    // Inject script to update map center and markers
     const script = `
       if (window.updateMapData) {
-        window.updateMapData(${JSON.stringify(stations)}, ${cityData.lat}, ${cityData.lng}, ${cityData.zoom});
+        window.updateMapData(${JSON.stringify(stations)}, ${cityData.lat}, ${cityData.lng}, ${cityData.zoom}, ${isDark});
       }
     `;
     webViewRef.current.injectJavaScript(script);
-  }, [stations, selectedCity]);
+  }, [stations, selectedCity, isDark]);
 
   const initialCity = CITY_COORDS[selectedCity] || CITY_COORDS["All India"];
 
@@ -55,11 +57,14 @@ export const LeafletMapView: React.FC<LeafletMapViewProps> = ({
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body, #map { width: 100%; height: 100%; background: #080c14; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    html, body, #map { width: 100%; height: 100%; background: ${isDark ? "#080c14" : "#f0f9ff"}; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     
-    /* Dark Cyber Map Tiles Filter */
-    .leaflet-tile {
+    /* Dark / Light Tile Filters */
+    .dark-tiles .leaflet-tile {
       filter: brightness(0.85) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.7);
+    }
+    .light-tiles .leaflet-tile {
+      filter: contrast(1.05) saturate(1.1);
     }
     
     /* Custom Glowing EV Pins */
@@ -94,10 +99,10 @@ export const LeafletMapView: React.FC<LeafletMapViewProps> = ({
     }
 
     /* Cluster Badges */
-    .marker-cluster-small, .marker-cluster-medium, .marker-cluster-large {
+    .dark-tiles .marker-cluster-small, .dark-tiles .marker-cluster-medium, .dark-tiles .marker-cluster-large {
       background-color: rgba(56, 189, 248, 0.25) !important;
     }
-    .marker-cluster div {
+    .dark-tiles .marker-cluster div {
       background-color: #080c14 !important;
       color: #00f2fe !important;
       font-weight: 900 !important;
@@ -105,12 +110,20 @@ export const LeafletMapView: React.FC<LeafletMapViewProps> = ({
       box-shadow: 0 0 10px rgba(56, 189, 248, 0.6) !important;
     }
 
+    .light-tiles .marker-cluster div {
+      background-color: #0284c7 !important;
+      color: #ffffff !important;
+      font-weight: 900 !important;
+      border: 2px solid #ffffff !important;
+      box-shadow: 0 0 10px rgba(2, 132, 199, 0.4) !important;
+    }
+
     .leaflet-control-attribution {
       display: none !important;
     }
   </style>
 </head>
-<body>
+<body class="${isDark ? "dark-tiles" : "light-tiles"}">
   <div id="map"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -123,7 +136,6 @@ export const LeafletMapView: React.FC<LeafletMapViewProps> = ({
       attributionControl: false
     });
 
-    // Dark Street Map Tiles
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       subdomains: ['a', 'b', 'c']
@@ -138,7 +150,8 @@ export const LeafletMapView: React.FC<LeafletMapViewProps> = ({
 
     var currentStationsMap = {};
 
-    window.updateMapData = function(stations, lat, lng, zoom) {
+    window.updateMapData = function(stations, lat, lng, zoom, isDarkMode) {
+      document.body.className = isDarkMode ? 'dark-tiles' : 'light-tiles';
       clusterGroup.clearLayers();
       currentStationsMap = {};
 
@@ -180,20 +193,19 @@ export const LeafletMapView: React.FC<LeafletMapViewProps> = ({
       clusterGroup.addLayers(markers);
     };
 
-    // Initial populate
-    window.updateMapData(${JSON.stringify(stations)}, ${initialCity.lat}, ${initialCity.lng}, ${initialCity.zoom});
+    window.updateMapData(${JSON.stringify(stations)}, ${initialCity.lat}, ${initialCity.lng}, ${initialCity.zoom}, ${isDark});
   </script>
 </body>
 </html>
   `;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <WebView
         ref={webViewRef}
         originWhitelist={["*"]}
         source={{ html: htmlContent }}
-        style={styles.webView}
+        style={[styles.webView, { backgroundColor: colors.background }]}
         javaScriptEnabled
         domStorageEnabled
         scrollEnabled={false}
@@ -208,7 +220,7 @@ export const LeafletMapView: React.FC<LeafletMapViewProps> = ({
           }
         }}
         renderLoading={() => (
-          <View style={styles.loaderContainer}>
+          <View style={[styles.loaderContainer, { backgroundColor: colors.background }]}>
             <ActivityIndicator size="large" color={colors.primary} />
           </View>
         )}
@@ -220,17 +232,14 @@ export const LeafletMapView: React.FC<LeafletMapViewProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   webView: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   loaderContainer: {
     position: "absolute",
     inset: 0,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.background,
   },
 });

@@ -1,7 +1,7 @@
 import React from "react";
 import { View, Text, StyleSheet, TextInput, TouchableOpacity } from "react-native";
-import { Zap, Search, SlidersHorizontal, MapPin } from "lucide-react-native";
-import { colors, radius, spacing } from "../theme/theme";
+import { Zap, Search, SlidersHorizontal, Sun, Moon } from "lucide-react-native";
+import { darkColors, lightColors, radius, spacing } from "../theme/theme";
 
 interface HeaderBarProps {
   searchQuery: string;
@@ -9,6 +9,9 @@ interface HeaderBarProps {
   onOpenFilters: () => void;
   stationCount: number;
   currentCity: string;
+  isDark: boolean;
+  onToggleTheme: () => void;
+  activeFilterCount?: number;
 }
 
 export const HeaderBar: React.FC<HeaderBarProps> = ({
@@ -17,42 +20,91 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
   onOpenFilters,
   stationCount,
   currentCity,
+  isDark,
+  onToggleTheme,
+  activeFilterCount = 0,
 }) => {
+  const colors = isDark ? darkColors : lightColors;
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background, borderBottomColor: colors.borderSubtle }]}>
       {/* Brand Header */}
       <View style={styles.topRow}>
         <View style={styles.brandRow}>
-          <View style={styles.logoBadge}>
+          <View style={[styles.logoBadge, { backgroundColor: "rgba(0, 242, 254, 0.12)", borderColor: "rgba(0, 242, 254, 0.3)" }]}>
             <Zap size={18} color="#00f2fe" fill="#00f2fe" />
           </View>
           <View>
-            <Text style={styles.brandTitle}>
-              EV<Text style={styles.brandAccent}>FINDER</Text>
+            <Text style={[styles.brandTitle, { color: colors.foreground }]}>
+              EV<Text style={{ color: colors.primary }}>FINDER</Text>
             </Text>
-            <Text style={styles.brandSubtitle}>INDIA CHARGING NETWORK</Text>
+            <Text style={[styles.brandSubtitle, { color: colors.frost }]}>INDIA CHARGING NETWORK</Text>
           </View>
         </View>
 
-        {/* Live Stations Badge */}
-        <View style={styles.statusBadge}>
-          <View style={styles.pulseDot} />
-          <Text style={styles.statusText}>{stationCount} LIVE</Text>
+        {/* Right side: Live Badge + Theme Toggle */}
+        <View style={styles.topRightGroup}>
+          <View style={[styles.statusBadge, { backgroundColor: "rgba(16, 185, 129, 0.12)", borderColor: "rgba(16, 185, 129, 0.3)" }]}>
+            <View style={[styles.pulseDot, { backgroundColor: colors.success }]} />
+            <Text style={[styles.statusText, { color: colors.success }]}>{stationCount} LIVE</Text>
+          </View>
+
+          {/* Theme Switcher Button (Sun / Moon) */}
+          <TouchableOpacity
+            style={[
+              styles.themeBtn,
+              {
+                backgroundColor: colors.backgroundCardSolid,
+                borderColor: colors.border,
+              },
+            ]}
+            onPress={onToggleTheme}
+            activeOpacity={0.7}
+            accessibilityLabel="Toggle Theme"
+          >
+            {isDark ? (
+              <Sun size={17} color="#f59e0b" fill="#f59e0b" />
+            ) : (
+              <Moon size={17} color="#4338ca" fill="#4338ca" />
+            )}
+          </TouchableOpacity>
         </View>
       </View>
 
-      {/* Search Input Bar */}
-      <View style={styles.searchContainer}>
+      {/* Search Input Bar with Working Filter Button */}
+      <View
+        style={[
+          styles.searchContainer,
+          {
+            backgroundColor: colors.backgroundCardSolid,
+            borderColor: colors.border,
+          },
+        ]}
+      >
         <Search size={18} color={colors.foregroundMuted} style={styles.searchIcon} />
         <TextInput
-          style={styles.searchInput}
+          style={[styles.searchInput, { color: colors.foreground }]}
           placeholder={`Search ${currentCity} or brand...`}
           placeholderTextColor={colors.foregroundSubtle}
           value={searchQuery}
           onChangeText={onSearchChange}
         />
-        <TouchableOpacity style={styles.filterButton} onPress={onOpenFilters} activeOpacity={0.7}>
-          <SlidersHorizontal size={16} color={colors.primary} />
+
+        {/* Working Filter Button */}
+        <TouchableOpacity
+          style={[
+            styles.filterButton,
+            {
+              backgroundColor: activeFilterCount > 0 ? colors.primary : "rgba(56, 189, 248, 0.12)",
+            },
+          ]}
+          onPress={onOpenFilters}
+          activeOpacity={0.7}
+        >
+          <SlidersHorizontal
+            size={16}
+            color={activeFilterCount > 0 ? "#020617" : colors.primary}
+          />
         </TouchableOpacity>
       </View>
     </View>
@@ -64,9 +116,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
     paddingBottom: spacing.sm,
-    backgroundColor: colors.background,
     borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle,
   },
   topRow: {
     flexDirection: "row",
@@ -80,73 +130,74 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   logoBadge: {
-    width: 32,
-    height: 32,
+    width: 34,
+    height: 34,
     borderRadius: radius.md,
-    backgroundColor: "rgba(0, 242, 254, 0.12)",
     borderWidth: 1,
-    borderColor: "rgba(0, 242, 254, 0.3)",
     alignItems: "center",
     justifyContent: "center",
   },
   brandTitle: {
     fontSize: 18,
     fontWeight: "900",
-    color: colors.foreground,
     letterSpacing: 0.5,
-  },
-  brandAccent: {
-    color: colors.primary,
   },
   brandSubtitle: {
     fontSize: 9,
-    fontWeight: "700",
-    color: colors.frost,
+    fontWeight: "800",
     letterSpacing: 1,
+  },
+  topRightGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
   statusBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
     paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingVertical: 6,
     borderRadius: radius.full,
-    backgroundColor: "rgba(16, 185, 129, 0.12)",
     borderWidth: 1,
-    borderColor: "rgba(16, 185, 129, 0.3)",
   },
   pulseDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: colors.success,
   },
   statusText: {
     fontSize: 11,
     fontWeight: "800",
-    color: colors.success,
+  },
+  themeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: colors.backgroundCardSolid,
     borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: colors.border,
     paddingHorizontal: spacing.md,
-    height: 46,
+    height: 48,
   },
   searchIcon: {
     marginRight: spacing.sm,
   },
   searchInput: {
     flex: 1,
-    color: colors.foreground,
     fontSize: 14,
+    fontWeight: "600",
   },
   filterButton: {
-    padding: 6,
+    padding: 8,
     borderRadius: radius.sm,
-    backgroundColor: "rgba(56, 189, 248, 0.12)",
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

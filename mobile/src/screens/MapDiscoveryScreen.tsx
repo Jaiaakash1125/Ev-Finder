@@ -13,28 +13,36 @@ import { Map, List } from "lucide-react-native";
 import { Station } from "../types";
 import { fetchStations } from "../api/client";
 import { stations as fallbackStations } from "../data/stations";
-import { colors, radius, spacing } from "../theme/theme";
+import { darkColors, lightColors, radius, spacing } from "../theme/theme";
 import { HeaderBar } from "../components/HeaderBar";
 import { FilterChipsBar } from "../components/FilterChipsBar";
 import { StationCardMobile } from "../components/StationCardMobile";
 import { StationDetailBottomSheet } from "../components/StationDetailBottomSheet";
 import { LeafletMapView } from "../components/LeafletMapView";
+import { FilterModal, FilterState } from "../components/FilterModal";
 
 export const MapDiscoveryScreen: React.FC = () => {
-  // Start with full dataset immediately so user never sees 0 stations
+  // Theme State (Dark by default, switchable to Light)
+  const [isDark, setIsDark] = useState<boolean>(true);
+  const colors = isDark ? darkColors : lightColors;
+
+  // Station Data State
   const [allStations, setAllStations] = useState<Station[]>(fallbackStations);
   const [loading, setLoading] = useState<boolean>(false);
-  const [isLiveDb, setIsLiveDb] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<"map" | "list">("map");
 
-  // Filters State (1:1 identical to PC website)
+  // Search & Filter State
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [selectedCity, setSelectedCity] = useState<string>("All India");
-  const [onlyFastDc, setOnlyFastDc] = useState<boolean>(false);
-  const [onlyAvailable, setOnlyAvailable] = useState<boolean>(false);
-  const [selectedConnector, setSelectedConnector] = useState<string | null>(null);
+  const [filters, setFilters] = useState<FilterState>({
+    city: "All India",
+    minPowerKw: 0,
+    connector: null,
+    network: null,
+    onlyAvailable: false,
+  });
 
-  // Selected Station for Bottom Sheet
+  // Modal Visibility States
+  const [filterModalVisible, setFilterModalVisible] = useState<boolean>(false);
   const [selectedStation, setSelectedStation] = useState<Station | null>(null);
   const [sheetVisible, setSheetVisible] = useState<boolean>(false);
 
@@ -44,11 +52,9 @@ export const MapDiscoveryScreen: React.FC = () => {
 
   const loadLiveXamppStations = async () => {
     try {
-      // Tries to connect to live XAMPP MySQL backend on host
       const res = await fetchStations();
       if (res.data && res.data.length > 0) {
         setAllStations(res.data);
-        setIsLiveDb(res.isLiveDb);
       }
     } catch (err) {
       console.warn("Using fallback dataset:", err);
@@ -56,37 +62,62 @@ export const MapDiscoveryScreen: React.FC = () => {
   };
 
   const handleCityChange = (city: string) => {
-    setSelectedCity(city);
+    setFilters((prev) => ({ ...prev, city }));
   };
 
-  // Filter stations based on city, search, fast DC, availability, and connectors
+  const handleToggleFastDc = () => {
+    setFilters((prev) => ({
+      ...prev,
+      minPowerKw: prev.minPowerKw >= 50 ? 0 : 50,
+    }));
+  };
+
+  const handleToggleAvailable = () => {
+    setFilters((prev) => ({
+      ...prev,
+      onlyAvailable: !prev.onlyAvailable,
+    }));
+  };
+
+  const handleSelectConnector = (connector: string | null) => {
+    setFilters((prev) => ({ ...prev, connector }));
+  };
+
+  // Filter stations based on city, search, speed, availability, network, and connectors
   const filteredStations = useMemo(() => {
     return allStations.filter((s) => {
       // 1. City Filter
-      if (selectedCity && selectedCity !== "All India") {
-        if (s.city.toLowerCase() !== selectedCity.toLowerCase()) {
+      if (filters.city && filters.city !== "All India") {
+        if (s.city.toLowerCase() !== filters.city.toLowerCase()) {
           return false;
         }
       }
 
-      // 2. Fast DC Filter (>= 50kW)
-      if (onlyFastDc && s.maxPowerKw < 50) {
+      // 2. Fast DC / Power Filter (kW)
+      if (filters.minPowerKw > 0 && s.maxPowerKw < filters.minPowerKw) {
         return false;
       }
 
       // 3. Availability Filter
-      if (onlyAvailable && s.status !== "available") {
+      if (filters.onlyAvailable && s.status !== "available") {
         return false;
       }
 
       // 4. Connector Filter
-      if (selectedConnector) {
-        if (!s.connectors.some((c) => c.toLowerCase().includes(selectedConnector.toLowerCase()))) {
+      if (filters.connector) {
+        if (!s.connectors.some((c) => c.toLowerCase().includes(filters.connector!.toLowerCase()))) {
           return false;
         }
       }
 
-      // 5. Search Text Filter
+      // 5. Network Brand Filter
+      if (filters.network) {
+        if (!s.network.toLowerCase().includes(filters.network.toLowerCase())) {
+          return false;
+        }
+      }
+
+      // 6. Search Text Filter
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const matchesName = s.name.toLowerCase().includes(q);
@@ -100,29 +131,41 @@ export const MapDiscoveryScreen: React.FC = () => {
 
       return true;
     });
-  }, [allStations, selectedCity, onlyFastDc, onlyAvailable, selectedConnector, searchQuery]);
+  }, [allStations, filters, searchQuery]);
+
+  const activeFilterCount = [
+    filters.city !== "All India",
+    filters.minPowerKw > 0,
+    filters.connector !== null,
+    filters.network !== null,
+    filters.onlyAvailable,
+  ].filter(Boolean).length;
 
   return (
-    <View style={styles.container}>
-      {/* Top Search & Brand Header */}
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {/* Top Search & Brand Header with Theme Toggle & Working Filter Button */}
       <HeaderBar
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
-        onOpenFilters={() => {}}
+        onOpenFilters={() => setFilterModalVisible(true)}
         stationCount={filteredStations.length}
-        currentCity={selectedCity}
+        currentCity={filters.city}
+        isDark={isDark}
+        onToggleTheme={() => setIsDark(!isDark)}
+        activeFilterCount={activeFilterCount}
       />
 
-      {/* Horizontal Filter Chips */}
+      {/* Horizontal Quick Filter Chips */}
       <FilterChipsBar
-        onlyFastDc={onlyFastDc}
-        onToggleFastDc={() => setOnlyFastDc(!onlyFastDc)}
-        onlyAvailable={onlyAvailable}
-        onToggleAvailable={() => setOnlyAvailable(!onlyAvailable)}
-        selectedConnector={selectedConnector}
-        onSelectConnector={setSelectedConnector}
-        selectedCity={selectedCity}
+        onlyFastDc={filters.minPowerKw >= 50}
+        onToggleFastDc={handleToggleFastDc}
+        onlyAvailable={filters.onlyAvailable}
+        onToggleAvailable={handleToggleAvailable}
+        selectedConnector={filters.connector}
+        onSelectConnector={handleSelectConnector}
+        selectedCity={filters.city}
         onSelectCity={handleCityChange}
+        isDark={isDark}
       />
 
       {/* Main Content: Map or List View */}
@@ -130,15 +173,16 @@ export const MapDiscoveryScreen: React.FC = () => {
         <View style={styles.mapContainer}>
           <LeafletMapView
             stations={filteredStations}
-            selectedCity={selectedCity}
+            selectedCity={filters.city}
             onSelectStation={(station) => {
               setSelectedStation(station);
               setSheetVisible(true);
             }}
+            isDark={isDark}
           />
         </View>
       ) : (
-        <View style={styles.listContainer}>
+        <View style={[styles.listContainer, { backgroundColor: colors.background }]}>
           {loading ? (
             <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
           ) : (
@@ -149,6 +193,7 @@ export const MapDiscoveryScreen: React.FC = () => {
               renderItem={({ item }) => (
                 <StationCardMobile
                   station={item}
+                  isDark={isDark}
                   onPress={() => {
                     setSelectedStation(item);
                     setSheetVisible(true);
@@ -168,7 +213,7 @@ export const MapDiscoveryScreen: React.FC = () => {
       {/* Floating View Switcher (Map <-> List) */}
       <View style={styles.viewToggleWrapper}>
         <TouchableOpacity
-          style={styles.viewTogglePill}
+          style={[styles.viewTogglePill, { backgroundColor: colors.primary }]}
           onPress={() => setViewMode(viewMode === "map" ? "list" : "map")}
           activeOpacity={0.85}
         >
@@ -186,11 +231,31 @@ export const MapDiscoveryScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
+      {/* Filter Modal Drawer */}
+      <FilterModal
+        visible={filterModalVisible}
+        onClose={() => setFilterModalVisible(false)}
+        filters={filters}
+        onApplyFilters={(newFilters) => setFilters(newFilters)}
+        onResetFilters={() =>
+          setFilters({
+            city: "All India",
+            minPowerKw: 0,
+            connector: null,
+            network: null,
+            onlyAvailable: false,
+          })
+        }
+        totalMatchingStations={filteredStations.length}
+        isDark={isDark}
+      />
+
       {/* Station Detail Bottom Sheet */}
       <StationDetailBottomSheet
         station={selectedStation}
         visible={sheetVisible}
         onClose={() => setSheetVisible(false)}
+        isDark={isDark}
       />
     </View>
   );
@@ -199,14 +264,12 @@ export const MapDiscoveryScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   mapContainer: {
     flex: 1,
   },
   listContainer: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   listContent: {
     padding: spacing.lg,
@@ -224,12 +287,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: colors.primary,
     paddingHorizontal: spacing.xl,
     paddingVertical: 12,
     borderRadius: radius.full,
-    shadowColor: colors.primary,
-    shadowOpacity: 0.4,
+    shadowColor: "#000",
+    shadowOpacity: 0.3,
     shadowRadius: 10,
     elevation: 6,
   },

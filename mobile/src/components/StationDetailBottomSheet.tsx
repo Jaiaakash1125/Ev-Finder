@@ -14,24 +14,26 @@ import {
   Navigation,
   MapPin,
   Copy,
-  Clock,
   CheckCircle2,
 } from "lucide-react-native";
 import { Station } from "../types";
-import { colors, radius, spacing } from "../theme/theme";
+import { darkColors, lightColors, radius, spacing } from "../theme/theme";
 
 interface StationDetailBottomSheetProps {
   station: Station | null;
   visible: boolean;
   onClose: () => void;
+  isDark?: boolean;
 }
 
 export const StationDetailBottomSheet: React.FC<StationDetailBottomSheetProps> = ({
   station,
   visible,
   onClose,
+  isDark = true,
 }) => {
   const [copied, setCopied] = useState(false);
+  const colors = isDark ? darkColors : lightColors;
 
   if (!station) return null;
 
@@ -50,15 +52,23 @@ export const StationDetailBottomSheet: React.FC<StationDetailBottomSheetProps> =
       <View style={styles.overlay}>
         <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose} />
 
-        <View style={styles.sheetContainer}>
+        <View
+          style={[
+            styles.sheetContainer,
+            {
+              backgroundColor: colors.backgroundSecondary,
+              borderColor: colors.border,
+            },
+          ]}
+        >
           {/* Top Drag Handle */}
-          <View style={styles.dragHandle} />
+          <View style={[styles.dragHandle, { backgroundColor: colors.foregroundSubtle }]} />
 
           {/* Network & City Header Bar */}
-          <View style={styles.headerRow}>
+          <View style={[styles.headerRow, { borderBottomColor: colors.borderSubtle }]}>
             <View style={styles.networkTag}>
-              <Text style={styles.networkText}>{station.network}</Text>
-              <Text style={styles.cityText}>· 📍 {station.city}</Text>
+              <Text style={[styles.networkText, { color: colors.accent }]}>{station.network}</Text>
+              <Text style={[styles.cityText, { color: colors.frost }]}>· 📍 {station.city}</Text>
             </View>
 
             <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
@@ -68,16 +78,18 @@ export const StationDetailBottomSheet: React.FC<StationDetailBottomSheetProps> =
 
           <ScrollView style={styles.bodyScroll} showsVerticalScrollIndicator={false}>
             {/* Title & Full Address */}
-            <Text style={styles.title}>{station.name}</Text>
+            <Text style={[styles.title, { color: colors.foreground }]}>{station.name}</Text>
             <View style={styles.addressRow}>
               <MapPin size={14} color={colors.foregroundSubtle} />
-              <Text style={styles.addressText}>{station.address}</Text>
+              <Text style={[styles.addressText, { color: colors.foregroundMuted }]}>
+                {station.address}
+              </Text>
             </View>
 
             {/* Big Action Buttons Row (Directions & Copy GPS) */}
             <View style={styles.actionButtonsRow}>
               <TouchableOpacity
-                style={styles.primaryNavBtn}
+                style={[styles.primaryNavBtn, { backgroundColor: colors.primary }]}
                 onPress={handleOpenDirections}
                 activeOpacity={0.85}
               >
@@ -86,12 +98,18 @@ export const StationDetailBottomSheet: React.FC<StationDetailBottomSheetProps> =
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={styles.secondaryCopyBtn}
+                style={[
+                  styles.secondaryCopyBtn,
+                  {
+                    backgroundColor: colors.backgroundInput,
+                    borderColor: colors.border,
+                  },
+                ]}
                 onPress={handleCopyCoords}
                 activeOpacity={0.85}
               >
                 <Copy size={15} color={colors.primary} />
-                <Text style={styles.secondaryCopyText}>
+                <Text style={[styles.secondaryCopyText, { color: colors.primary }]}>
                   {copied
                     ? "✓ GPS Coords Copied!"
                     : `Copy GPS (${station.lat.toFixed(4)}, ${station.lng.toFixed(4)})`}
@@ -101,13 +119,29 @@ export const StationDetailBottomSheet: React.FC<StationDetailBottomSheetProps> =
 
             {/* Key Metrics Grid (Max Speed & Total Ports) */}
             <View style={styles.metricsGrid}>
-              <View style={styles.metricCard}>
-                <Text style={styles.metricLabel}>MAX SPEED</Text>
-                <Text style={styles.metricValue}>⚡ {station.maxPowerKw} kW</Text>
+              <View
+                style={[
+                  styles.metricCard,
+                  {
+                    backgroundColor: colors.backgroundInput,
+                    borderColor: colors.borderSubtle,
+                  },
+                ]}
+              >
+                <Text style={[styles.metricLabel, { color: colors.foregroundSubtle }]}>MAX SPEED</Text>
+                <Text style={[styles.metricValue, { color: colors.foreground }]}>⚡ {station.maxPowerKw} kW</Text>
               </View>
 
-              <View style={styles.metricCard}>
-                <Text style={styles.metricLabel}>TOTAL CHARGING BAYS</Text>
+              <View
+                style={[
+                  styles.metricCard,
+                  {
+                    backgroundColor: colors.backgroundInput,
+                    borderColor: colors.borderSubtle,
+                  },
+                ]}
+              >
+                <Text style={[styles.metricLabel, { color: colors.foregroundSubtle }]}>TOTAL CHARGING BAYS</Text>
                 <Text style={[styles.metricValue, { color: colors.accent }]}>
                   🔌 {station.totalPorts} Ports
                 </Text>
@@ -116,12 +150,21 @@ export const StationDetailBottomSheet: React.FC<StationDetailBottomSheetProps> =
 
             {/* Supported Connectors */}
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Supported Connectors</Text>
+              <Text style={[styles.sectionTitle, { color: colors.frost }]}>Supported Connectors</Text>
               <View style={styles.connectorsRow}>
                 {station.connectors.map((c) => (
-                  <View key={c} style={styles.connPill}>
+                  <View
+                    key={c}
+                    style={[
+                      styles.connPill,
+                      {
+                        backgroundColor: "rgba(0, 242, 254, 0.08)",
+                        borderColor: "rgba(0, 242, 254, 0.25)",
+                      },
+                    ]}
+                  >
                     <Zap size={13} color="#00f2fe" />
-                    <Text style={styles.connText}>{c}</Text>
+                    <Text style={[styles.connText, { color: colors.foreground }]}>{c}</Text>
                   </View>
                 ))}
               </View>
@@ -129,22 +172,42 @@ export const StationDetailBottomSheet: React.FC<StationDetailBottomSheetProps> =
 
             {/* Location Details & Hours */}
             <View style={styles.gridDetails}>
-              <View style={styles.detailBox}>
-                <Text style={styles.detailLabel}>CITY & STATE</Text>
-                <Text style={styles.detailValue}>
+              <View
+                style={[
+                  styles.detailBox,
+                  {
+                    backgroundColor: colors.backgroundInput,
+                    borderColor: colors.borderSubtle,
+                  },
+                ]}
+              >
+                <Text style={[styles.detailLabel, { color: colors.foregroundSubtle }]}>CITY & STATE</Text>
+                <Text style={[styles.detailValue, { color: colors.foreground }]}>
                   📍 {station.city} {station.state ? `· ${station.state}` : ""}
                 </Text>
               </View>
-              <View style={styles.detailBox}>
-                <Text style={styles.detailLabel}>OPERATING HOURS</Text>
-                <Text style={styles.detailValue}>🕒 {station.hours || "24×7"}</Text>
+              <View
+                style={[
+                  styles.detailBox,
+                  {
+                    backgroundColor: colors.backgroundInput,
+                    borderColor: colors.borderSubtle,
+                  },
+                ]}
+              >
+                <Text style={[styles.detailLabel, { color: colors.foregroundSubtle }]}>OPERATING HOURS</Text>
+                <Text style={[styles.detailValue, { color: colors.foreground }]}>
+                  🕒 {station.hours || "24×7"}
+                </Text>
               </View>
             </View>
 
             {/* Footer Verification Badge */}
-            <View style={styles.footerRow}>
+            <View style={[styles.footerRow, { borderTopColor: colors.borderSubtle }]}>
               <CheckCircle2 size={14} color={colors.success} />
-              <Text style={styles.footerText}>OpenStreetMap Verified Station</Text>
+              <Text style={[styles.footerText, { color: colors.frost }]}>
+                OpenStreetMap Verified Station
+              </Text>
             </View>
           </ScrollView>
         </View>
@@ -163,11 +226,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   sheetContainer: {
-    backgroundColor: colors.backgroundSecondary,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     borderWidth: 1,
-    borderColor: colors.border,
     maxHeight: "85%",
     paddingHorizontal: spacing.xl,
     paddingBottom: spacing.xxl,
@@ -176,7 +237,6 @@ const styles = StyleSheet.create({
     width: 44,
     height: 5,
     borderRadius: 3,
-    backgroundColor: colors.foregroundSubtle,
     alignSelf: "center",
     marginTop: spacing.md,
     marginBottom: spacing.sm,
@@ -187,7 +247,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingBottom: spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle,
   },
   networkTag: {
     flexDirection: "row",
@@ -197,12 +256,10 @@ const styles = StyleSheet.create({
   networkText: {
     fontSize: 12,
     fontWeight: "800",
-    color: colors.accent,
     textTransform: "uppercase",
   },
   cityText: {
     fontSize: 12,
-    color: colors.frost,
   },
   closeBtn: {
     padding: 6,
@@ -215,7 +272,6 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: "900",
-    color: colors.foreground,
     letterSpacing: -0.3,
   },
   addressRow: {
@@ -227,7 +283,6 @@ const styles = StyleSheet.create({
   },
   addressText: {
     fontSize: 13,
-    color: colors.foregroundMuted,
     flex: 1,
     lineHeight: 18,
   },
@@ -240,12 +295,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    backgroundColor: colors.primary,
     paddingVertical: 14,
     borderRadius: radius.lg,
-    shadowColor: colors.primary,
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
     elevation: 4,
   },
   primaryNavText: {
@@ -258,16 +309,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    backgroundColor: colors.backgroundInput,
     borderWidth: 1,
-    borderColor: colors.border,
     paddingVertical: 12,
     borderRadius: radius.lg,
   },
   secondaryCopyText: {
     fontSize: 12,
     fontWeight: "700",
-    color: colors.primary,
   },
   metricsGrid: {
     flexDirection: "row",
@@ -276,9 +324,7 @@ const styles = StyleSheet.create({
   },
   metricCard: {
     flex: 1,
-    backgroundColor: "rgba(56, 189, 248, 0.05)",
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
     borderRadius: radius.md,
     padding: spacing.md,
     alignItems: "center",
@@ -286,13 +332,11 @@ const styles = StyleSheet.create({
   metricLabel: {
     fontSize: 9,
     fontWeight: "800",
-    color: colors.foregroundSubtle,
     letterSpacing: 0.8,
   },
   metricValue: {
     fontSize: 16,
     fontWeight: "900",
-    color: colors.foreground,
     marginTop: 3,
   },
   section: {
@@ -301,7 +345,6 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 12,
     fontWeight: "800",
-    color: colors.frost,
     marginBottom: spacing.sm,
     textTransform: "uppercase",
     letterSpacing: 0.5,
@@ -315,9 +358,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "rgba(0, 242, 254, 0.08)",
     borderWidth: 1,
-    borderColor: "rgba(0, 242, 254, 0.25)",
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: radius.md,
@@ -325,29 +366,24 @@ const styles = StyleSheet.create({
   connText: {
     fontSize: 13,
     fontWeight: "700",
-    color: colors.foreground,
   },
   gridDetails: {
     gap: spacing.sm,
     marginBottom: spacing.lg,
   },
   detailBox: {
-    backgroundColor: "rgba(255, 255, 255, 0.03)",
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
     padding: spacing.md,
     borderRadius: radius.md,
   },
   detailLabel: {
     fontSize: 9,
     fontWeight: "800",
-    color: colors.foregroundSubtle,
     letterSpacing: 0.5,
   },
   detailValue: {
     fontSize: 13,
     fontWeight: "700",
-    color: colors.foreground,
     marginTop: 2,
   },
   footerRow: {
@@ -357,12 +393,10 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: colors.borderSubtle,
     marginBottom: spacing.lg,
   },
   footerText: {
     fontSize: 12,
-    color: colors.frost,
     fontWeight: "600",
   },
 });
