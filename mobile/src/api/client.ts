@@ -1,312 +1,253 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { stations as fallbackStations, Station, cityCoordinates } from "../data/stations";
 import Constants from "expo-constants";
-import { Station, UserProfile, RoutePlanResult, ReviewItem } from "../types";
-import { stations as fallbackStations, cityCoordinates } from "../data/stations";
 
-// Dynamically determine backend URL from Expo host or local LAN
+// Dynamically determine host IP so mobile phones on Wi-Fi can reach the computer's XAMPP server
 const debuggerHost = Constants.expoConfig?.hostUri || Constants.manifest2?.extra?.expoGo?.debuggerHost;
 const hostIp = debuggerHost ? debuggerHost.split(":")[0] : "10.52.145.12";
 
-export const API_BASE_URL = `http://${hostIp}:5000/api/v1`;
+// XAMPP Apache endpoint on host machine
+export const XAMPP_API_URLS = [
+  `http://${hostIp}/api/get_stations.php`,
+  `http://${hostIp}/get_stations.php`,
+  `http://localhost/api/get_stations.php`,
+  `http://localhost/get_stations.php`,
+];
 
-const TOKEN_STORAGE_KEY = "@evfinder_auth_token";
-const USER_STORAGE_KEY = "@evfinder_user_profile";
+export interface FetchStationsResult {
+  data: Station[];
+  isLiveDb: boolean;
+  source: "xampp_mysql" | "local_fallback";
+  error?: string;
+}
 
-function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+// Mapping of substrings/districts/aliases to clean major cities (1:1 identical to PC website)
+const CITY_NAME_MAP: [RegExp, string][] = [
+  [/bengaluru|bangalore/i, "Bengaluru"],
+  [/mumbai|bombay|navi mumbai|thane|borivali|andheri|nariman/i, "Mumbai"],
+  [/new delhi|delhi|noida|greater noida|gurugram|gurgaon|faridabad|ghaziabad|dwarka|saket|connaught/i, "New Delhi"],
+  [/hyderabad|secunderabad|gachibowli|hitec city/i, "Hyderabad"],
+  [/chennai|madras|guindy|omr|velachery/i, "Chennai"],
+  [/pune|pimpri|chinchwad|hinjewadi|wakad|baner/i, "Pune"],
+  [/kolkata|calcutta|howrah|salt lake|new town/i, "Kolkata"],
+  [/ahmedabad|gandhinagar|sg highway/i, "Ahmedabad"],
+  [/jaipur|mansarovar|vaishali nagar/i, "Jaipur"],
+  [/kochi|cochin|ernakulam|kakkanad|edappally/i, "Kochi"],
+  [/chandigarh|mohali|panchkula/i, "Chandigarh"],
+  [/lucknow|gomti nagar|hazratganj/i, "Lucknow"],
+  [/surat/i, "Surat"],
+  [/indore/i, "Indore"],
+  [/coimbatore/i, "Coimbatore"],
+  [/goa|panaji|margao|calangute|candolim|mapusa|vasco/i, "Goa"],
+  [/nagpur/i, "Nagpur"],
+  [/vadodara|baroda/i, "Vadodara"],
+  [/bhopal/i, "Bhopal"],
+  [/visakhapatnam|vizag/i, "Visakhapatnam"],
+  [/patna/i, "Patna"],
+  [/agra/i, "Agra"],
+  [/varanasi|banaras|kashi/i, "Varanasi"],
+  [/amritsar/i, "Amritsar"],
+  [/bhubaneswar|cuttack/i, "Bhubaneswar"],
+  [/guwahati/i, "Guwahati"],
+  [/dehradun/i, "Dehradun"],
+  [/thiruvananthapuram|trivandrum/i, "Thiruvananthapuram"],
+  [/mysore|mysuru/i, "Mysore"],
+  [/mangalore|mangaluru/i, "Mangalore"],
+  [/ludhiana/i, "Ludhiana"],
+  [/kanpur/i, "Kanpur"],
+  [/nashik/i, "Nashik"],
+  [/rajkot/i, "Rajkot"],
+  [/vijayawada/i, "Vijayawada"],
+  [/madurai/i, "Madurai"],
+  [/raipur/i, "Raipur"],
+  [/ranchi/i, "Ranchi"],
+  [/jodhpur/i, "Jodhpur"],
+  [/udaipur/i, "Udaipur"],
+];
+
+function getDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
+    Math.cos(lat1 * (Math.PI / 180)) *
+      Math.cos(lat2 * (Math.PI / 180)) *
       Math.sin(dLon / 2) *
       Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return Math.round(R * c * 10) / 10;
+  return R * c;
 }
 
-class MobileApiClient {
-  private token: string | null = null;
+export function cleanCityName(
+  rawCity: string,
+  rawAddress: string,
+  rawName: string,
+  lat?: number,
+  lng?: number
+): string {
+  const combined = `${rawCity || ""} ${rawAddress || ""} ${rawName || ""}`;
 
-  async init() {
+  for (const [regex, cleanName] of CITY_NAME_MAP) {
+    if (regex.test(combined)) {
+      return cleanName;
+    }
+  }
+
+  if (lat && lng && !isNaN(lat) && !isNaN(lng) && lat !== 0) {
+    let closestCity = "";
+    let minDistance = 45;
+
+    for (const [cityName, coords] of Object.entries(cityCoordinates)) {
+      const dist = getDistanceKm(lat, lng, coords.lat, coords.lng);
+      if (dist < minDistance) {
+        minDistance = dist;
+        closestCity = cityName;
+      }
+    }
+
+    if (closestCity) {
+      return closestCity;
+    }
+  }
+
+  if (rawCity) {
+    let c = rawCity.trim();
+    c = c.replace(/^[0-9\-\+\s]+/, "").trim();
+    if (c.includes(",")) c = c.split(",")[0]?.trim() || "";
+    if (c.includes(":")) c = c.split(":")[0]?.trim() || "";
+    if (
+      c.length > 20 ||
+      /dealer|service|station|industrial|highway|toll|sector|opposite|petroleum/i.test(c)
+    ) {
+      if (rawAddress) {
+        const parts = rawAddress
+          .split(",")
+          .map((p) => p.trim())
+          .filter(Boolean);
+        for (let i = parts.length - 1; i >= 0; i--) {
+          const part = parts[i] || "";
+          if (
+            part.length > 2 &&
+            part.length < 20 &&
+            !/^\d+$/.test(part) &&
+            !/india/i.test(part)
+          ) {
+            return part;
+          }
+        }
+      }
+    }
+    if (c.length > 2 && c.length <= 25) {
+      return c;
+    }
+  }
+
+  return "Bengaluru";
+}
+
+/**
+ * Normalizes raw SQL database records from XAMPP into standard Station objects
+ * (1:1 identical to PC website src/lib/api.ts)
+ */
+export function normalizeStation(raw: any): Station {
+  let connectors: string[] = [];
+  if (Array.isArray(raw.connectors)) {
+    connectors = raw.connectors;
+  } else if (typeof raw.connectors === "string") {
     try {
-      this.token = await AsyncStorage.getItem(TOKEN_STORAGE_KEY);
+      connectors = JSON.parse(raw.connectors);
     } catch {
-      this.token = null;
+      connectors = raw.connectors.split(",").map((c: string) => c.trim());
     }
   }
 
-  async setToken(token: string) {
-    this.token = token;
-    await AsyncStorage.setItem(TOKEN_STORAGE_KEY, token);
-  }
-
-  async clearAuth() {
-    this.token = null;
-    await AsyncStorage.removeItem(TOKEN_STORAGE_KEY);
-    await AsyncStorage.removeItem(USER_STORAGE_KEY);
-  }
-
-  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      ...(options.headers as Record<string, string>),
-    };
-
-    if (this.token) {
-      headers["Authorization"] = `Bearer ${this.token}`;
-    }
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 4000); // 4s timeout
-
+  let amenities: string[] = [];
+  if (Array.isArray(raw.amenities)) {
+    amenities = raw.amenities;
+  } else if (typeof raw.amenities === "string") {
     try {
-      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-        ...options,
-        headers,
+      amenities = JSON.parse(raw.amenities);
+    } catch {
+      amenities = raw.amenities.split(",").map((a: string) => a.trim());
+    }
+  }
+
+  const lat = Number(raw.lat || raw.latitude) || 20.5937;
+  const lng = Number(raw.lng || raw.longitude) || 78.9629;
+  const rawCity = String(raw.city || "");
+  const rawAddress = String(raw.address || "");
+  const rawName = String(raw.name || "");
+
+  const cleanCity = cleanCityName(rawCity, rawAddress, rawName, lat, lng);
+
+  return {
+    id: String(raw.id || raw.place_id || `st-${Math.random().toString(36).substring(2, 9)}`),
+    name: rawName || "EV Charging Station",
+    network: String(raw.network || "Public Charger"),
+    city: cleanCity,
+    state: String(raw.state || "India"),
+    address: rawAddress,
+    pincode: String(raw.pincode || ""),
+    lat,
+    lng,
+    distanceKm: Number(raw.distanceKm) || 0,
+    status: ["available", "limited", "busy", "offline"].includes(raw.status)
+      ? raw.status
+      : "available",
+    freePorts: Number(raw.freePorts ?? 1),
+    totalPorts: Number(raw.totalPorts ?? 2),
+    connectors: connectors.length > 0 ? connectors : ["CCS2"],
+    maxPowerKw: Number(raw.maxPowerKw || 50),
+    pricePerKwh: Number(raw.pricePerKwh || 10),
+    hours: String(raw.hours || "24×7"),
+    amenities: amenities.length > 0 ? amenities : ["Restrooms"],
+    rating: Number(raw.rating || 4.5),
+    reviews: Number(raw.reviews || 0),
+  };
+}
+
+/**
+ * Fetches stations from the XAMPP PHP API backend on localhost / LAN,
+ * exactly as done on the PC website in src/lib/api.ts
+ */
+export async function fetchStations(): Promise<FetchStationsResult> {
+  for (const url of XAMPP_API_URLS) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3500);
+
+      const response = await fetch(url, {
         signal: controller.signal,
+        headers: { Accept: "application/json" },
       });
 
       clearTimeout(timeoutId);
 
-      const json = await response.json();
-      if (!response.ok) {
-        throw new Error(json.error || `HTTP error ${response.status}`);
+      if (response.ok) {
+        const rawData = await response.json();
+        if (Array.isArray(rawData) && rawData.length > 0) {
+          const normalized = rawData.map(normalizeStation);
+          return {
+            data: normalized,
+            isLiveDb: true,
+            source: "xampp_mysql",
+          };
+        }
       }
-
-      return json;
-    } catch (err: any) {
-      clearTimeout(timeoutId);
-      console.warn(`[API] Network request to ${API_BASE_URL}${endpoint} failed, utilizing local fallback engine:`, err.message);
-      throw err;
-    }
-  }
-
-  // --- Auth APIs ---
-  async sendOtp(phone: string) {
-    try {
-      return await this.request<{ success: boolean; message: string; data: { demoOtp?: string } }>("/auth/otp/send", {
-        method: "POST",
-        body: JSON.stringify({ phone }),
-      });
     } catch {
-      // Local fallback auth
-      return {
-        success: true,
-        message: `OTP sent to ${phone}`,
-        data: { demoOtp: "123456" },
-      };
+      // try next URL
     }
   }
 
-  async verifyOtp(phone: string, otp: string, fullName?: string) {
-    try {
-      const res = await this.request<{
-        success: boolean;
-        data: { user: UserProfile; tokens: { accessToken: string } };
-      }>("/auth/otp/verify", {
-        method: "POST",
-        body: JSON.stringify({ phone, otp, fullName }),
-      });
-
-      if (res.data?.tokens?.accessToken) {
-        await this.setToken(res.data.tokens.accessToken);
-        await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(res.data.user));
-      }
-
-      return res.data;
-    } catch {
-      // Offline mock user login
-      const mockUser: UserProfile = {
-        id: "usr_local_1",
-        phone,
-        email: "driver@evfinder.app",
-        fullName: fullName || "EV Driver",
-        avatarUrl: "",
-        vehicles: [
-          {
-            id: "veh_1",
-            brand: "Tata",
-            model: "Nexon EV Max",
-            connectorType: "CCS2",
-            batteryKwh: 40.5,
-          },
-        ],
-        favorites: ["st-1", "st-2"],
-      };
-      await this.setToken("mock_jwt_token_local");
-      await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(mockUser));
-      return { user: mockUser, tokens: { accessToken: "mock_jwt_token_local" } };
-    }
-  }
-
-  // --- Stations APIs ---
-  async getNearbyStations(params: {
-    lat: number;
-    lng: number;
-    city?: string;
-    radiusKm?: number;
-    connector?: string;
-    minPowerKw?: number;
-    network?: string;
-    status?: string;
-    limit?: number;
-  }): Promise<{ count: number; data: Station[] }> {
-    try {
-      const query = new URLSearchParams({
-        lat: params.lat.toString(),
-        lng: params.lng.toString(),
-        radius_km: (params.radiusKm || 1000).toString(),
-        limit: (params.limit || 1000).toString(),
-        ...(params.city && { city: params.city }),
-        ...(params.connector && { connector: params.connector }),
-        ...(params.minPowerKw && { min_power_kw: params.minPowerKw.toString() }),
-        ...(params.network && { network: params.network }),
-        ...(params.status && { status: params.status }),
-      });
-
-      return await this.request<{ count: number; data: Station[] }>(`/stations/nearby?${query.toString()}`);
-    } catch {
-      // Local fallback: Return all stations matching the filters
-      const lat = params.lat;
-      const lng = params.lng;
-      const radiusKm = params.radiusKm || 1000;
-      const minPowerKw = params.minPowerKw || 0;
-      const selectedCity = params.city;
-
-      const filtered = fallbackStations
-        .map((s) => ({
-          ...s,
-          distanceKm: haversineKm(lat, lng, s.lat, s.lng),
-        }))
-        .filter((s) => {
-          if (selectedCity && selectedCity !== "All India" && s.city.toLowerCase() !== selectedCity.toLowerCase()) {
-            // Also check radius if in city view
-            if (s.distanceKm > (radiusKm || 50)) return false;
-          }
-          if (params.connector && !s.connectors.some((c) => c.toLowerCase().includes(params.connector!.toLowerCase()))) {
-            return false;
-          }
-          if (minPowerKw > 0 && s.maxPowerKw < minPowerKw) {
-            return false;
-          }
-          if (params.status && params.status !== "all" && s.status !== params.status) {
-            return false;
-          }
-          return true;
-        })
-        .sort((a, b) => a.distanceKm - b.distanceKm);
-
-      return {
-        count: filtered.length,
-        data: filtered,
-      };
-    }
-  }
-
-  async getAllStations(): Promise<Station[]> {
-    return fallbackStations;
-  }
-
-  async getStationDetails(id: string): Promise<{ data: Station & { reviews: ReviewItem[] } }> {
-    try {
-      return await this.request<{ data: Station & { reviews: ReviewItem[] } }>(`/stations/${id}`);
-    } catch {
-      const station = fallbackStations.find((s) => s.id === id) || fallbackStations[0];
-      return {
-        data: {
-          ...station,
-          reviews: [],
-        },
-      };
-    }
-  }
-
-  async searchStations(q: string, city?: string): Promise<{ count: number; data: Station[] }> {
-    try {
-      const query = new URLSearchParams({
-        q,
-        ...(city && { city }),
-      });
-      return await this.request<{ count: number; data: Station[] }>(`/stations/search?${query.toString()}`);
-    } catch {
-      const lower = q.toLowerCase();
-      const results = fallbackStations.filter(
-        (s) =>
-          s.name.toLowerCase().includes(lower) ||
-          s.address.toLowerCase().includes(lower) ||
-          s.network.toLowerCase().includes(lower) ||
-          s.city.toLowerCase().includes(lower)
-      );
-      return { count: results.length, data: results };
-    }
-  }
-
-  // --- Route Planning ---
-  async planRoute(payload: {
-    origin: { lat: number; lng: number };
-    destination: { lat: number; lng: number };
-    vehicle?: { batteryKwh?: number; currentSocPercent?: number; efficiencyKmPerKwh?: number };
-  }): Promise<{ data: RoutePlanResult }> {
-    try {
-      return await this.request<{ data: RoutePlanResult }>("/routes/plan", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
-    } catch {
-      const totalDistanceKm = haversineKm(payload.origin.lat, payload.origin.lng, payload.destination.lat, payload.destination.lng);
-      return {
-        data: {
-          totalDistanceKm,
-          estimatedDriveTimeMinutes: Math.round((totalDistanceKm / 60) * 60),
-          stopsNeeded: totalDistanceKm > 200,
-          recommendedStops: [
-            {
-              stopNumber: 1,
-              station: fallbackStations[0],
-              estimatedArrivalSoc: 24,
-              targetChargeSoc: 80,
-              chargeTimeMinutes: 30,
-              estimatedCostInr: 420,
-            },
-          ],
-          arrivalDestinationSocPercent: 48,
-        },
-      };
-    }
-  }
-
-  // --- User Garage & Favorites ---
-  async getFavorites(): Promise<{ data: Station[] }> {
-    try {
-      return await this.request<{ data: Station[] }>("/user/favorites");
-    } catch {
-      return { data: fallbackStations.slice(0, 3) };
-    }
-  }
-
-  async toggleFavorite(stationId: string, isFav: boolean) {
-    try {
-      return await this.request(`/user/favorites/${stationId}`, {
-        method: isFav ? "DELETE" : "POST",
-      });
-    } catch {
-      return { success: true };
-    }
-  }
-
-  async reserveSlot(stationId: string, portNumber: number = 1, durationMinutes: number = 45) {
-    try {
-      return await this.request(`/stations/${stationId}/reserve`, {
-        method: "POST",
-        body: JSON.stringify({ portNumber, durationMinutes }),
-      });
-    } catch {
-      return { success: true, message: "Slot reserved (Offline mode)" };
-    }
-  }
+  // Fallback to local dataset (exact same fallback as PC website)
+  return {
+    data: fallbackStations,
+    isLiveDb: false,
+    source: "local_fallback",
+  };
 }
 
-export const api = new MobileApiClient();
+export const api = {
+  init: async () => {},
+  getStations: fetchStations,
+};

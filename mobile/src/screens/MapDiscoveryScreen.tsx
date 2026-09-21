@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   StyleSheet,
@@ -11,7 +11,7 @@ import * as Linking from "expo-linking";
 import { Map, List } from "lucide-react-native";
 
 import { Station } from "../types";
-import { api } from "../api/client";
+import { fetchStations } from "../api/client";
 import { colors, radius, spacing } from "../theme/theme";
 import { HeaderBar } from "../components/HeaderBar";
 import { FilterChipsBar } from "../components/FilterChipsBar";
@@ -19,24 +19,14 @@ import { StationCardMobile } from "../components/StationCardMobile";
 import { StationDetailBottomSheet } from "../components/StationDetailBottomSheet";
 import { LeafletMapView } from "../components/LeafletMapView";
 
-const CITY_COORDS: Record<string, { latitude: number; longitude: number }> = {
-  "All India": { latitude: 20.5937, longitude: 78.9629 },
-  Bengaluru: { latitude: 12.9716, longitude: 77.5946 },
-  "New Delhi": { latitude: 28.6139, longitude: 77.209 },
-  Mumbai: { latitude: 19.076, longitude: 72.8777 },
-  Hyderabad: { latitude: 17.385, longitude: 78.4867 },
-  Chennai: { latitude: 13.0827, longitude: 80.2707 },
-  Pune: { latitude: 18.5204, longitude: 73.8567 },
-  Kolkata: { latitude: 22.5726, longitude: 88.3639 },
-};
-
 export const MapDiscoveryScreen: React.FC = () => {
-  const [stations, setStations] = useState<Station[]>([]);
+  const [allStations, setAllStations] = useState<Station[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [isLiveDb, setIsLiveDb] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<"map" | "list">("map");
 
-  // Filters State
-  const [searchQuery, setSearchQuery] = useState<string>("");
+  // Filters State (1:1 identical to PC website)
+  const [searchQuery, setSearchQuery] = useState<string>("" );
   const [selectedCity, setSelectedCity] = useState<string>("All India");
   const [onlyFastDc, setOnlyFastDc] = useState<boolean>(false);
   const [onlyAvailable, setOnlyAvailable] = useState<boolean>(false);
@@ -48,26 +38,17 @@ export const MapDiscoveryScreen: React.FC = () => {
 
   useEffect(() => {
     loadStations();
-  }, [selectedCity, onlyFastDc, onlyAvailable, selectedConnector]);
+  }, []);
 
   const loadStations = async () => {
     setLoading(true);
     try {
-      const coords = CITY_COORDS[selectedCity] || CITY_COORDS["All India"];
-      const res = await api.getNearbyStations({
-        lat: coords.latitude,
-        lng: coords.longitude,
-        city: selectedCity,
-        radiusKm: selectedCity === "All India" ? 5000 : 50,
-        minPowerKw: onlyFastDc ? 50 : undefined,
-        connector: selectedConnector || undefined,
-        status: onlyAvailable ? "available" : undefined,
-        limit: 2000,
-      });
-
-      setStations(res.data || []);
+      // Calls XAMPP MySQL get_stations.php exactly like the PC website
+      const res = await fetchStations();
+      setAllStations(res.data || []);
+      setIsLiveDb(res.isLiveDb);
     } catch (err) {
-      console.warn("Error fetching stations:", err);
+      console.warn("Error loading stations:", err);
     } finally {
       setLoading(false);
     }
@@ -77,15 +58,48 @@ export const MapDiscoveryScreen: React.FC = () => {
     setSelectedCity(city);
   };
 
-  const filteredStations = stations.filter((s) => {
-    if (!searchQuery) return true;
-    const q = searchQuery.toLowerCase();
-    return (
-      s.name.toLowerCase().includes(q) ||
-      s.address.toLowerCase().includes(q) ||
-      s.network.toLowerCase().includes(q)
-    );
-  });
+  // Filter stations based on city, search, fast DC, availability, and connectors
+  const filteredStations = useMemo(() => {
+    return allStations.filter((s) => {
+      // 1. City Filter
+      if (selectedCity && selectedCity !== "All India") {
+        if (s.city.toLowerCase() !== selectedCity.toLowerCase()) {
+          return false;
+        }
+      }
+
+      // 2. Fast DC Filter (>= 50kW)
+      if (onlyFastDc && s.maxPowerKw < 50) {
+        return false;
+      }
+
+      // 3. Availability Filter
+      if (onlyAvailable && s.status !== "available") {
+        return false;
+      }
+
+      // 4. Connector Filter
+      if (selectedConnector) {
+        if (!s.connectors.some((c) => c.toLowerCase().includes(selectedConnector.toLowerCase()))) {
+          return false;
+        }
+      }
+
+      // 5. Search Text Filter
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const matchesName = s.name.toLowerCase().includes(q);
+        const matchesAddr = s.address.toLowerCase().includes(q);
+        const matchesNet = s.network.toLowerCase().includes(q);
+        const matchesCity = s.city.toLowerCase().includes(q);
+        if (!matchesName && !matchesAddr && !matchesNet && !matchesCity) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [allStations, selectedCity, onlyFastDc, onlyAvailable, selectedConnector, searchQuery]);
 
   return (
     <View style={styles.container}>
