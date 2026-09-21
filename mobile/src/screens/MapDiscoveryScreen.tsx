@@ -20,12 +20,12 @@ import { FilterChipsBar } from "../components/FilterChipsBar";
 import { StationCardMobile } from "../components/StationCardMobile";
 import { StationDetailBottomSheet } from "../components/StationDetailBottomSheet";
 
-// Default India center (Bengaluru metro)
+// Default India center (matching website)
 const INITIAL_REGION = {
-  latitude: 12.9716,
-  longitude: 77.5946,
-  latitudeDelta: 0.12,
-  longitudeDelta: 0.12,
+  latitude: 20.5937,
+  longitude: 78.9629,
+  latitudeDelta: 14.0,
+  longitudeDelta: 14.0,
 };
 
 const CITY_COORDS: Record<string, { latitude: number; longitude: number }> = {
@@ -46,7 +46,7 @@ export const MapDiscoveryScreen: React.FC = () => {
 
   // Filters State
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [selectedCity, setSelectedCity] = useState<string>("Bengaluru");
+  const [selectedCity, setSelectedCity] = useState<string>("All India");
   const [onlyFastDc, setOnlyFastDc] = useState<boolean>(false);
   const [onlyAvailable, setOnlyAvailable] = useState<boolean>(false);
   const [selectedConnector, setSelectedConnector] = useState<string | null>(null);
@@ -64,15 +64,16 @@ export const MapDiscoveryScreen: React.FC = () => {
   const loadStations = async () => {
     setLoading(true);
     try {
-      const coords = CITY_COORDS[selectedCity] || CITY_COORDS["Bengaluru"];
+      const coords = CITY_COORDS[selectedCity] || CITY_COORDS["All India"];
       const res = await api.getNearbyStations({
         lat: coords.latitude,
         lng: coords.longitude,
-        radiusKm: selectedCity === "All India" ? 1500 : 45,
+        city: selectedCity,
+        radiusKm: selectedCity === "All India" ? 5000 : 50,
         minPowerKw: onlyFastDc ? 50 : undefined,
         connector: selectedConnector || undefined,
         status: onlyAvailable ? "available" : undefined,
-        limit: 150,
+        limit: 2000,
       });
 
       setStations(res.data || []);
