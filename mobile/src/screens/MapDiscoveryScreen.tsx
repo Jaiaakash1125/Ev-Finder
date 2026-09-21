@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   StyleSheet,
@@ -7,10 +7,8 @@ import {
   Text,
   ActivityIndicator,
 } from "react-native";
-import MapView, { Marker, PROVIDER_DEFAULT } from "react-native-maps";
-import * as Location from "expo-location";
 import * as Linking from "expo-linking";
-import { Map, List, Crosshair, Zap } from "lucide-react-native";
+import { Map, List } from "lucide-react-native";
 
 import { Station } from "../types";
 import { api } from "../api/client";
@@ -19,14 +17,7 @@ import { HeaderBar } from "../components/HeaderBar";
 import { FilterChipsBar } from "../components/FilterChipsBar";
 import { StationCardMobile } from "../components/StationCardMobile";
 import { StationDetailBottomSheet } from "../components/StationDetailBottomSheet";
-
-// Default India center (matching website)
-const INITIAL_REGION = {
-  latitude: 20.5937,
-  longitude: 78.9629,
-  latitudeDelta: 14.0,
-  longitudeDelta: 14.0,
-};
+import { LeafletMapView } from "../components/LeafletMapView";
 
 const CITY_COORDS: Record<string, { latitude: number; longitude: number }> = {
   "All India": { latitude: 20.5937, longitude: 78.9629 },
@@ -54,8 +45,6 @@ export const MapDiscoveryScreen: React.FC = () => {
   // Selected Station for Bottom Sheet
   const [selectedStation, setSelectedStation] = useState<Station | null>(null);
   const [sheetVisible, setSheetVisible] = useState<boolean>(false);
-
-  const mapRef = useRef<MapView | null>(null);
 
   useEffect(() => {
     loadStations();
@@ -86,32 +75,6 @@ export const MapDiscoveryScreen: React.FC = () => {
 
   const handleCityChange = (city: string) => {
     setSelectedCity(city);
-    const coords = CITY_COORDS[city];
-    if (coords && mapRef.current) {
-      mapRef.current.animateToRegion({
-        latitude: coords.latitude,
-        longitude: coords.longitude,
-        latitudeDelta: city === "All India" ? 12 : 0.12,
-        longitudeDelta: city === "All India" ? 12 : 0.12,
-      });
-    }
-  };
-
-  const handleRecenterGps = async () => {
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === "granted") {
-        const loc = await Location.getCurrentPositionAsync({});
-        mapRef.current?.animateToRegion({
-          latitude: loc.coords.latitude,
-          longitude: loc.coords.longitude,
-          latitudeDelta: 0.08,
-          longitudeDelta: 0.08,
-        });
-      }
-    } catch (e) {
-      console.warn("GPS error:", e);
-    }
   };
 
   const filteredStations = stations.filter((s) => {
@@ -150,45 +113,14 @@ export const MapDiscoveryScreen: React.FC = () => {
       {/* Main Content: Map or List View */}
       {viewMode === "map" ? (
         <View style={styles.mapContainer}>
-          <MapView
-            ref={mapRef}
-            provider={PROVIDER_DEFAULT}
-            style={StyleSheet.absoluteFillObject}
-            initialRegion={INITIAL_REGION}
-            showsUserLocation
-            showsCompass
-          >
-            {filteredStations.map((station) => (
-              <Marker
-                key={station.id}
-                coordinate={{ latitude: station.lat, longitude: station.lng }}
-                onPress={() => {
-                  setSelectedStation(station);
-                  setSheetVisible(true);
-                }}
-              >
-                <View
-                  style={[
-                    styles.customMarker,
-                    station.status === "available"
-                      ? styles.markerAvailable
-                      : styles.markerBusy,
-                  ]}
-                >
-                  <Zap size={14} color="#020617" />
-                </View>
-              </Marker>
-            ))}
-          </MapView>
-
-          {/* Floating Recenter GPS FAB */}
-          <TouchableOpacity
-            style={styles.recenterFab}
-            onPress={handleRecenterGps}
-            activeOpacity={0.8}
-          >
-            <Crosshair size={20} color={colors.primary} />
-          </TouchableOpacity>
+          <LeafletMapView
+            stations={filteredStations}
+            selectedCity={selectedCity}
+            onSelectStation={(station) => {
+              setSelectedStation(station);
+              setSheetVisible(true);
+            }}
+          />
         </View>
       ) : (
         <View style={styles.listContainer}>
@@ -267,39 +199,6 @@ const styles = StyleSheet.create({
   },
   loader: {
     marginTop: spacing.xxl,
-  },
-  customMarker: {
-    padding: 7,
-    borderRadius: radius.full,
-    borderWidth: 2,
-    borderColor: "#ffffff",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.4,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  markerAvailable: {
-    backgroundColor: colors.accent,
-  },
-  markerBusy: {
-    backgroundColor: colors.warning,
-  },
-  recenterFab: {
-    position: "absolute",
-    right: spacing.lg,
-    bottom: 90,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.backgroundCardSolid,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.3,
-    elevation: 4,
   },
   viewToggleWrapper: {
     position: "absolute",
