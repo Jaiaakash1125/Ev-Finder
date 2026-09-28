@@ -45,15 +45,15 @@ export function StationCard({ station, onSelect }: StationCardProps) {
         </span>
       </div>
 
-      <div className="mt-5 pt-3.5 border-t border-border/60 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+      <div className="mt-5 pt-3.5 border-t border-border/60 flex items-center gap-2">
         <Link
           to="/station/$stationId"
           params={{ stationId: station.id }}
           onClick={(e) => e.stopPropagation()}
-          className="rounded-xl charge-button font-display font-extrabold px-4 py-2.5 text-xs sm:text-sm text-center transition flex items-center justify-center gap-1.5 shadow-md shadow-accent/20 hover:scale-[1.02] active:scale-[0.98] whitespace-nowrap"
+          className="flex-1 rounded-xl charge-button font-display font-bold px-3 py-2 text-[11px] text-center transition flex items-center justify-center gap-1 shadow-md shadow-accent/20 hover:scale-[1.02] active:scale-[0.98] min-w-0"
         >
-          <span>Station Details</span>
-          <span>→</span>
+          <span className="truncate">Station Details</span>
+          <span className="shrink-0">→</span>
         </Link>
 
         <a
@@ -61,13 +61,13 @@ export function StationCard({ station, onSelect }: StationCardProps) {
           target="_blank"
           rel="noopener noreferrer"
           onClick={(e) => e.stopPropagation()}
-          className="rounded-xl charge-button font-display font-extrabold px-4 py-2.5 text-xs sm:text-sm text-center transition flex items-center justify-center gap-2 shadow-md shadow-accent/20 hover:scale-[1.02] active:scale-[0.98] whitespace-nowrap"
+          className="flex-1 rounded-xl charge-button font-display font-bold px-3 py-2 text-[11px] text-center transition flex items-center justify-center gap-1 shadow-md shadow-accent/20 hover:scale-[1.02] active:scale-[0.98] min-w-0"
           title="Open in Google Maps"
         >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="shrink-0">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="shrink-0">
             <polygon points="3 11 22 2 13 21 11 13 3 11" />
           </svg>
-          <span className="whitespace-nowrap">Get Directions ↗</span>
+          <span className="truncate">Get Directions ↗</span>
         </a>
       </div>
     </div>

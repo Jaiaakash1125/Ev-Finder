@@ -40,7 +40,8 @@ export function StationFilterPanel({
   totalAllStations,
   className = "",
 }: StationFilterPanelProps) {
-  const allCityNames = Object.keys(cityCoordinates);
+  const allCityNames = Object.keys(cityCoordinates || {});
+  const safeCities = Array.isArray(cities) ? cities : allCityNames.map(name => ({ name }));
   const totalCount = totalAllStations ?? totalResults;
 
   const activeFilterCount = [
@@ -120,7 +121,7 @@ export function StationFilterPanel({
           >
             🇮🇳 All India ({totalCount} Live)
           </button>
-          {cities.map((c) => (
+          {safeCities.map((c) => (
             <button
               key={c.name}
               onClick={() =>

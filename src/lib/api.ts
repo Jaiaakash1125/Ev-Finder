@@ -203,12 +203,12 @@ export function normalizeStation(raw: any): Station {
 
 /**
  * Fetches all EV stations from the XAMPP PHP API backend,
- * with automatic fallback to local dataset if XAMPP is unreachable.
+ * with automatic fallback to local dataset (8,025 stations) if XAMPP is unreachable.
  */
 export async function fetchStations(): Promise<FetchStationsResult> {
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3500); // 3.5s timeout for local API
+    const timeoutId = setTimeout(() => controller.abort(), 4000);
 
     const response = await fetch(`${API_BASE_URL}/get_stations.php`, {
       signal: controller.signal,
@@ -237,10 +237,6 @@ export async function fetchStations(): Promise<FetchStationsResult> {
       source: "xampp_mysql",
     };
   } catch (err: any) {
-    console.warn(
-      "XAMPP backend not reached or returned an error, falling back to local dataset:",
-      err?.message || err
-    );
     return {
       data: fallbackStations,
       isLiveDb: false,

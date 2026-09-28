@@ -69,7 +69,7 @@ function StationDetailPage() {
             search={{ city: station.city, stationId: station.id }}
             className="text-xs font-semibold text-accent hover:underline flex items-center gap-1"
           >
-            🗺️ View on Live Map
+            🗺️ View on Map View
           </Link>
         </div>
 
@@ -203,7 +203,7 @@ function StationDetailPage() {
               search={{ city: station.city, stationId: station.id }}
               className="block w-full text-center rounded-xl charge-button font-display font-extrabold px-4 py-3 text-xs sm:text-sm shadow-md shadow-accent/20 hover:scale-[1.02] active:scale-[0.98] transition"
             >
-              View on Fullscreen Live Map →
+              View on Fullscreen Map View →
             </Link>
           </aside>
         </div>

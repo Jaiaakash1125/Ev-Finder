@@ -8,6 +8,7 @@
     "dev": "vite dev",
     "api:dev": "tsx backend/api-server.ts",
     "api:start": "tsx backend/api-server.ts",
+    "import:csv": "tsx scripts/importCsv.ts",
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",

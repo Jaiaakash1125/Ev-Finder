@@ -1,7 +1,7 @@
 <?php
 /**
  * India EV Map - XAMPP MySQL API Endpoint
- * Connects to `ev_charging.ev_data_india` (837+ stations) or fallback to `india_ev_db`
+ * Auto-detects and serves all 8,025+ EV charging stations
  */
 
 header("Access-Control-Allow-Origin: *");
@@ -14,24 +14,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit();
 }
 
+// Disable internal exception throwing for custom error handling
+mysqli_report(MYSQLI_REPORT_OFF);
+
 $db_host = "localhost";
 $db_user = "root";
 $db_pass = "";
 $db_port = 3306;
 
-// Check which database is available
-$target_db = "ev_charging";
-$conn = new mysqli($db_host, $db_user, $db_pass, $target_db, $db_port);
+// Databases to try in order of priority
+$candidate_dbs = ["csv_db 7", "evfinder", "india_ev_db", "ev_charging", "test"];
+$conn = null;
+$connected_db = "";
 
-if ($conn->connect_error) {
-    // Try fallback to india_ev_db
-    $target_db = "india_ev_db";
-    $conn = new mysqli($db_host, $db_user, $db_pass, $target_db, $db_port);
-    if ($conn->connect_error) {
-        http_response_code(500);
-        echo json_encode(["error" => "Database connection failed: " . $conn->connect_error]);
-        exit();
+foreach ($candidate_dbs as $db_name) {
+    $temp_conn = @new mysqli($db_host, $db_user, $db_pass, $db_name, $db_port);
+    if ($temp_conn && !$temp_conn->connect_error) {
+        $conn = $temp_conn;
+        $connected_db = $db_name;
+        break;
     }
+}
+
+if (!$conn) {
+    http_response_code(500);
+    echo json_encode(["error" => "Could not connect to MySQL database."]);
+    exit();
 }
 
 $conn->set_charset("utf8mb4");
@@ -39,34 +47,33 @@ $conn->set_charset("utf8mb4");
 $station_id = isset($_GET['id']) ? $conn->real_escape_string($_GET['id']) : null;
 $city_filter = isset($_GET['city']) ? $conn->real_escape_string($_GET['city']) : null;
 
-// Determine if table is `ev_data_india` or `ev_stations`
-$check_table = $conn->query("SHOW TABLES LIKE 'ev_data_india'");
-$is_ev_data_india = ($check_table && $check_table->num_rows > 0);
-
-if ($is_ev_data_india) {
-    $where_clauses = [];
-    if ($station_id) {
-        $where_clauses[] = "(place_id = '$station_id' OR MD5(CONCAT(COALESCE(name,''), COALESCE(latitude,''), COALESCE(longitude,''))) = '$station_id')";
+// Find which table exists
+$target_table = "";
+$candidate_tables = ["ev_data_india_enriched", "ev_data_india", "ev_stations"];
+foreach ($candidate_tables as $tbl) {
+    $check = $conn->query("SHOW TABLES LIKE '$tbl'");
+    if ($check && $check->num_rows > 0) {
+        $target_table = $tbl;
+        break;
     }
-    if ($city_filter && strtolower($city_filter) !== 'all' && strtolower($city_filter) !== 'all india') {
-        $where_clauses[] = "LOWER(city) = LOWER('$city_filter')";
-    }
-
-    $where_sql = count($where_clauses) > 0 ? "WHERE " . implode(" AND ", $where_clauses) : "";
-    $sql = "SELECT * FROM ev_data_india $where_sql";
-} else {
-    $where_clauses = [];
-    if ($station_id) {
-        $where_clauses[] = "id = '$station_id'";
-    }
-    if ($city_filter && strtolower($city_filter) !== 'all' && strtolower($city_filter) !== 'all india') {
-        $where_clauses[] = "LOWER(city) = LOWER('$city_filter')";
-    }
-
-    $where_sql = count($where_clauses) > 0 ? "WHERE " . implode(" AND ", $where_clauses) : "";
-    $sql = "SELECT * FROM ev_stations $where_sql";
 }
 
+if (!$target_table) {
+    // If no candidate found, pick first table in DB
+    $all_tables = $conn->query("SHOW TABLES");
+    if ($all_tables && $row = $all_tables->fetch_row()) {
+        $target_table = $row[0];
+    }
+}
+
+if (!$target_table) {
+    http_response_code(500);
+    echo json_encode(["error" => "No tables found in database $connected_db."]);
+    $conn->close();
+    exit();
+}
+
+$sql = "SELECT * FROM `$target_table`";
 $result = $conn->query($sql);
 
 if (!$result) {
@@ -76,41 +83,59 @@ if (!$result) {
     exit();
 }
 
-$stations = [];
-
-// Network detector helper
-function detectNetwork($name) {
-    $n = strtolower($name);
-    if (strpos($n, 'tata power') !== false) return 'Tata Power EZ Charge';
-    if (strpos($n, 'statiq') !== false) return 'Statiq';
-    if (strpos($n, 'ather') !== false) return 'Ather Grid';
-    if (strpos($n, 'bpcl') !== false) return 'BPCL e-Drive';
-    if (strpos($n, 'jio') !== false || strpos($n, 'pulse') !== false) return 'Jio-bp pulse';
-    if (strpos($n, 'zeon') !== false) return 'Zeon Charging';
-    if (strpos($n, 'charge zone') !== false || strpos($n, 'chargezone') !== false) return 'Charge Zone';
-    if (strpos($n, 'magenta') !== false) return 'Magenta ChargeGrid';
-    if (strpos($n, 'relux') !== false) return 'Relux Electric';
-    if (strpos($n, 'mercedes') !== false) return 'Mercedes-Benz High-Power';
-    if (strpos($n, 'kazam') !== false) return 'Kazam EV';
-    if (strpos($n, 'glida') !== false || strpos($n, 'fortum') !== false) return 'GLIDA';
-    return 'Public Charging Network';
+function parseConnectorsPHP($raw) {
+    if (!$raw || trim($raw) === '') return ["CCS2", "Type 2 AC"];
+    $list = [];
+    $lower = strtolower($raw);
+    if (strpos($lower, 'ccs') !== false) $list[] = "CCS2";
+    if (strpos($lower, 'type 2') !== false || strpos($lower, 'type2') !== false) $list[] = "Type 2 AC";
+    if (strpos($lower, 'chademo') !== false) $list[] = "CHAdeMO";
+    if (strpos($lower, 'bharat dc') !== false || strpos($lower, 'gb/t') !== false || strpos($lower, 'gbt') !== false) $list[] = "Bharat DC-001";
+    if (strpos($lower, 'bharat ac') !== false || strpos($lower, 'ac-001') !== false) $list[] = "Bharat AC-001";
+    if (strpos($lower, 'ather') !== false) $list[] = "Ather Dot";
+    if (strpos($lower, 'wall') !== false || strpos($lower, '15a') !== false) $list[] = "Wall Socket (15A)";
+    return count($list) > 0 ? array_values(array_unique($list)) : ["CCS2", "Type 2 AC"];
 }
 
-function extractPincode($address) {
-    if (preg_match('/\b[1-9][0-9]{5}\b/', $address, $matches)) {
-        return $matches[0];
+function parsePowerPHP($cap, $conn_types, $name) {
+    $text = $cap . ' ' . $conn_types . ' ' . $name;
+    if (preg_match_all('/(\d+)\s*(?:kw|kw\/h)/i', $text, $m)) {
+        $nums = array_map('intval', $m[1]);
+        $valid = array_filter($nums, function($n) { return $n > 0 && $n <= 500; });
+        if (count($valid) > 0) return max($valid);
     }
-    return '';
+    return 60;
 }
 
-function cleanCity($rawCity, $address, $name) {
+function cleanNetworkPHP($rawNetwork, $name) {
+    if (!empty($rawNetwork) && !preg_match('/unknown|null|none/i', $rawNetwork)) {
+        $n = trim($rawNetwork);
+        if (stripos($n, 'charge') !== false && stripos($n, 'zone') !== false) return "Charge Zone";
+        if (stripos($n, 'jio') !== false) return "Jio-bp pulse";
+        if (stripos($n, 'tata') !== false) return "Tata Power EZ Charge";
+        if (stripos($n, 'statiq') !== false) return "Statiq";
+        if (stripos($n, 'ather') !== false) return "Ather Grid";
+        if (stripos($n, 'bpcl') !== false) return "BPCL e-Drive";
+        if (stripos($n, 'zeon') !== false) return "Zeon Charging";
+        if (stripos($n, 'bolt') !== false) return "Bolt.Earth";
+        if (stripos($n, 'relux') !== false) return "Relux Electric";
+        if (stripos($n, 'kazam') !== false) return "Kazam EV";
+        if (stripos($n, 'glida') !== false || stripos($n, 'fortum') !== false) return "GLIDA";
+        if (stripos($n, 'shell') !== false) return "Shell Recharge";
+        if (stripos($n, 'hpcl') !== false) return "HPCL EV Charge";
+        if (stripos($n, 'iocl') !== false || stripos($n, 'indian oil') !== false) return "IOCL EV Power";
+        return $n;
+    }
+    return "Public Charging Network";
+}
+
+function cleanCityPHP($rawCity, $address, $name) {
     $text = strtolower($rawCity . ' ' . $address . ' ' . $name);
-    
     if (preg_match('/bengaluru|bangalore/i', $text)) return 'Bengaluru';
-    if (preg_match('/mumbai|bombay|navi mumbai|thane|borivali|andheri|nariman/i', $text)) return 'Mumbai';
+    if (preg_match('/mumbai|bombay|navi mumbai|thane|borivali|andheri/i', $text)) return 'Mumbai';
     if (preg_match('/new delhi|delhi|noida|greater noida|gurugram|gurgaon|faridabad|ghaziabad/i', $text)) return 'New Delhi';
     if (preg_match('/hyderabad|secunderabad|gachibowli|hitec/i', $text)) return 'Hyderabad';
-    if (preg_match('/chennai|madras|guindy|omr/i', $text)) return 'Chennai';
+    if (preg_match('/chennai|madras|guindy|omr|velachery/i', $text)) return 'Chennai';
     if (preg_match('/pune|pimpri|chinchwad|hinjewadi/i', $text)) return 'Pune';
     if (preg_match('/kolkata|calcutta|howrah|salt lake/i', $text)) return 'Kolkata';
     if (preg_match('/ahmedabad|gandhinagar/i', $text)) return 'Ahmedabad';
@@ -147,113 +172,108 @@ function cleanCity($rawCity, $address, $name) {
     if (preg_match('/jodhpur/i', $text)) return 'Jodhpur';
     if (preg_match('/udaipur/i', $text)) return 'Udaipur';
 
-    $c = trim($rawCity);
-    $c = preg_replace('/^[0-9\-\+\s]+/', '', $c);
-    if (strpos($c, ',') !== false) {
-        $parts = explode(',', $c);
-        $c = trim($parts[0]);
-    }
-    if (strpos($c, ':') !== false) {
-        $parts = explode(':', $c);
-        $c = trim($parts[0]);
-    }
-    if (strlen($c) > 2 && strlen($c) <= 25 && !preg_match('/dealer|service|station|industrial|highway|toll|sector|opposite|petroleum/i', $c)) {
+    if (!empty($rawCity) && strlen(trim($rawCity)) > 2 && strlen(trim($rawCity)) <= 25) {
+        $c = trim($rawCity);
+        if (strpos($c, ',') !== false) {
+            $parts = explode(',', $c);
+            $c = trim($parts[0]);
+        }
         return ucfirst(strtolower($c));
     }
-
-    return 'India';
+    return 'All India';
 }
 
-while ($row = $result->fetch_assoc()) {
-    if ($is_ev_data_india) {
-        $lat = isset($row['latitude']) ? (float)$row['latitude'] : 0.0;
-        $lng = isset($row['longitude']) ? (float)$row['longitude'] : 0.0;
-        
-        // Skip invalid coordinates
-        if ($lat == 0.0 && $lng == 0.0) continue;
-
-        $id = !empty($row['place_id']) ? $row['place_id'] : md5(($row['name'] ?? '') . $lat . $lng);
-        $name = !empty($row['name']) ? $row['name'] : 'EV Charging Station';
-        $network = detectNetwork($name);
-        $address = !empty($row['address']) ? $row['address'] : '';
-        $rawCity = !empty($row['city']) ? trim($row['city']) : '';
-        $city = cleanCity($rawCity, $address, $name);
-        $state = !empty($row['state']) ? trim($row['state']) : '';
-        $pincode = extractPincode($address);
-
-        // Power and connectors logic based on network / name
-        $isHighPower = stripos($name, 'high-power') !== false || stripos($name, 'super') !== false || stripos($name, 'fast') !== false;
-        $isTwoWheeler = stripos($name, 'ather') !== false;
-
-        $maxPowerKw = $isHighPower ? 150 : ($isTwoWheeler ? 30 : 60);
-        $connectors = $isTwoWheeler ? ["Ather Dot", "Type 2 AC"] : ($isHighPower ? ["CCS2", "CHAdeMO", "Type 2 AC"] : ["CCS2", "Type 2 AC"]);
-        
-        // Seed pseudo-random realistic values deterministically from lat/lng
-        $hashNum = (int)(abs($lat * 1000 + $lng * 1000));
-        $totalPorts = 4 + ($hashNum % 6);
-        $freePorts = 1 + ($hashNum % ($totalPorts - 1));
-        $rating = 4.0 + (($hashNum % 10) / 10.0);
-        $reviews = 25 + ($hashNum % 450);
-        $pricePerKwh = 9.5 + (($hashNum % 35) / 10.0);
-
-        $station = [
-            'id' => $id,
-            'name' => $name,
-            'network' => $network,
-            'city' => $city,
-            'state' => $state,
-            'address' => $address,
-            'pincode' => $pincode,
-            'lat' => $lat,
-            'lng' => $lng,
-            'distanceKm' => 0.0,
-            'status' => ($freePorts > 0 ? 'available' : 'busy'),
-            'freePorts' => $freePorts,
-            'totalPorts' => $totalPorts,
-            'connectors' => $connectors,
-            'maxPowerKw' => $maxPowerKw,
-            'pricePerKwh' => round($pricePerKwh, 2),
-            'hours' => '24×7',
-            'amenities' => ['Café', 'Restrooms', 'Free parking', 'Wi-Fi'],
-            'rating' => round($rating, 1),
-            'reviews' => $reviews,
-            'google_maps_link' => $row['google_maps_link'] ?? ''
-        ];
-        $stations[] = $station;
-    } else {
-        // Standard ev_stations format
-        if (!empty($row['connectors'])) {
-            $decoded = json_decode($row['connectors'], true);
-            $row['connectors'] = is_array($decoded) ? $decoded : array_map('trim', explode(',', $row['connectors']));
-        } else {
-            $row['connectors'] = ["CCS2"];
-        }
-
-        if (!empty($row['amenities'])) {
-            $decoded = json_decode($row['amenities'], true);
-            $row['amenities'] = is_array($decoded) ? $decoded : array_map('trim', explode(',', $row['amenities']));
-        } else {
-            $row['amenities'] = ["Restrooms"];
-        }
-
-        $row['lat'] = (float)$row['lat'];
-        $row['lng'] = (float)$row['lng'];
-        $row['distanceKm'] = isset($row['distanceKm']) ? (float)$row['distanceKm'] : 0.0;
-        $row['maxPowerKw'] = (int)$row['maxPowerKw'];
-        $row['pricePerKwh'] = (float)$row['pricePerKwh'];
-        $row['freePorts'] = (int)$row['freePorts'];
-        $row['totalPorts'] = (int)$row['totalPorts'];
-        $row['rating'] = (float)$row['rating'];
-        $row['reviews'] = (int)$row['reviews'];
-
-        $stations[] = $row;
+function extractPincodePHP($address) {
+    if (preg_match('/\b[1-9][0-9]{5}\b/', $address, $m)) {
+        return $m[0];
     }
+    return '';
+}
+
+$stations = [];
+$index = 0;
+
+while ($row = $result->fetch_assoc()) {
+    $index++;
+    // Check if table uses COL 1..COL 11 or standard column names
+    $col1 = $row['COL 1'] ?? $row['place_id'] ?? $row['id'] ?? '';
+    $col2 = $row['COL 2'] ?? $row['latitude'] ?? $row['lat'] ?? '';
+    $col3 = $row['COL 3'] ?? $row['longitude'] ?? $row['lng'] ?? '';
+
+    // Skip CSV header row if stored as data
+    if (strtolower($col1) === 'place_id' || strtolower($col2) === 'latitude' || strtolower($col2) === 'lat') {
+        continue;
+    }
+
+    $lat = (float)$col2;
+    $lng = (float)$col3;
+
+    if ($lat == 0.0 && $lng == 0.0) continue;
+
+    $rawNet = $row['COL 4'] ?? $row['charging_network'] ?? $row['network'] ?? '';
+    $rawName = $row['COL 5'] ?? $row['name'] ?? 'EV Charging Station';
+    $rawCity = $row['COL 6'] ?? $row['city'] ?? '';
+    $rawState = $row['COL 7'] ?? $row['state'] ?? 'India';
+    $rawAddr = $row['COL 8'] ?? $row['address'] ?? '';
+    $gmapsLink = $row['COL 9'] ?? $row['google_maps_link'] ?? '';
+    $rawConn = $row['COL 10'] ?? $row['connector_types'] ?? $row['connectors'] ?? '';
+    $rawCap = $row['COL 11'] ?? $row['charging_capacity'] ?? $row['maxPowerKw'] ?? '';
+
+    $name = trim($rawName);
+    $city = cleanCityPHP($rawCity, $rawAddr, $name);
+    $network = cleanNetworkPHP($rawNet, $name);
+    $connectors = parseConnectorsPHP($rawConn);
+    $maxPowerKw = parsePowerPHP($rawCap, $rawConn, $name);
+    $pincode = extractPincodePHP($rawAddr);
+    $id = !empty($col1) ? $col1 : "station-$index";
+
+    // Filtering by station id or city if requested
+    if ($station_id && $id !== $station_id) {
+        continue;
+    }
+    if ($city_filter && strtolower($city_filter) !== 'all' && strtolower($city_filter) !== 'all india') {
+        if (strtolower($city) !== strtolower($city_filter)) {
+            continue;
+        }
+    }
+
+    $hash = (int)(abs($lat * 1000 + $lng * 1000));
+    $totalPorts = 2 + ($hash % 6);
+    $freePorts = $hash % ($totalPorts + 1);
+    $pricePerKwh = round(9.5 + (($hash % 40) / 10.0), 2);
+    $rating = round(3.8 + (($hash % 12) / 10.0), 1);
+    $reviews = 15 + ($hash % 350);
+    $status = $freePorts === 0 ? 'busy' : ($freePorts === 1 ? 'limited' : 'available');
+
+    $stations[] = [
+        'id' => $id,
+        'name' => $name,
+        'network' => $network,
+        'city' => $city,
+        'state' => $rawState ?: 'India',
+        'address' => $rawAddr ?: "$name, $city",
+        'pincode' => $pincode,
+        'lat' => $lat,
+        'lng' => $lng,
+        'distanceKm' => 0.0,
+        'status' => $status,
+        'freePorts' => $freePorts,
+        'totalPorts' => $totalPorts,
+        'connectors' => $connectors,
+        'maxPowerKw' => $maxPowerKw,
+        'pricePerKwh' => $pricePerKwh,
+        'hours' => '24×7',
+        'amenities' => ['Restrooms', 'Café', 'Wi-Fi', 'Parking'],
+        'rating' => $rating,
+        'reviews' => $reviews,
+        'google_maps_link' => $gmapsLink
+    ];
 }
 
 if ($station_id && count($stations) > 0) {
-    echo json_encode($stations[0]);
+    echo json_encode($stations[0], JSON_UNESCAPED_UNICODE);
 } else {
-    echo json_encode($stations);
+    echo json_encode($stations, JSON_UNESCAPED_UNICODE);
 }
 
 $conn->close();

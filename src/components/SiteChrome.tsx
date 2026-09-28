@@ -1,8 +1,13 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { ThemeToggle } from "./ThemeToggle";
 
 export function SiteChrome({ children }: { children: ReactNode }) {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const isMapActive = pathname === "/map";
+  const isListActive = pathname.startsWith("/stations") || pathname.startsWith("/station");
+  const isConnectorsActive = pathname === "/connectors" || pathname.startsWith("/connector");
+
   return (
     <div className="relative min-h-screen overflow-hidden bg-background font-body text-foreground transition-colors duration-300">
       {/* Ambient gradient light - Electric Cyan & Sapphire Blue */}
@@ -20,7 +25,7 @@ export function SiteChrome({ children }: { children: ReactNode }) {
       </div>
 
       <div className="relative">
-        <header className="flex items-center justify-between px-6 sm:px-8 lg:px-14 py-5 border-b border-border/50 bg-background/40 backdrop-blur-md sticky top-0 z-50">
+        <header className="flex items-center justify-between px-6 sm:px-8 lg:px-14 py-4 border-b border-border/50 bg-background/40 backdrop-blur-md sticky top-0 z-50">
           <Link to="/" className="flex items-center gap-3">
             <div className="grid size-9 place-items-center rounded-xl charge-button font-display font-black shadow-md shadow-accent/20">
               ⚡
@@ -29,34 +34,44 @@ export function SiteChrome({ children }: { children: ReactNode }) {
               EvFinder
             </span>
           </Link>
-          <nav className="hidden md:flex items-center gap-7 text-sm font-semibold text-frost/80">
+          <nav className="hidden md:flex items-center gap-2 text-sm font-semibold">
             <Link
               to="/map"
-              className="flex items-center gap-2 text-accent hover:text-accent/80 font-bold transition"
+              className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-200 ${
+                isMapActive
+                  ? "bg-accent/15 text-accent border border-accent/40 font-bold shadow-sm shadow-accent/10"
+                  : "text-frost/70 hover:text-foreground hover:bg-ink2/60 border border-transparent"
+              }`}
             >
-              <span className="size-2 rounded-full bg-accent animate-pulse" />
-              Live Map
+              {isMapActive && <span className="size-2 rounded-full bg-accent animate-pulse" />}
+              Map View
             </Link>
-            <Link to="/stations" className="hover:text-foreground transition">
-              Stations Directory
+            <Link
+              to="/stations"
+              className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-200 ${
+                isListActive
+                  ? "bg-accent/15 text-accent border border-accent/40 font-bold shadow-sm shadow-accent/10"
+                  : "text-frost/70 hover:text-foreground hover:bg-ink2/60 border border-transparent"
+              }`}
+            >
+              {isListActive && <span className="size-2 rounded-full bg-accent animate-pulse" />}
+              List View
+            </Link>
+            <Link
+              to="/connectors"
+              className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-200 ${
+                isConnectorsActive
+                  ? "bg-accent/15 text-accent border border-accent/40 font-bold shadow-sm shadow-accent/10"
+                  : "text-frost/70 hover:text-foreground hover:bg-ink2/60 border border-transparent"
+              }`}
+            >
+              {isConnectorsActive && <span className="size-2 rounded-full bg-accent animate-pulse" />}
+              Connector Guide
             </Link>
           </nav>
           <div className="flex items-center gap-3">
             {/* Theme Toggle Button */}
             <ThemeToggle />
-
-            <Link
-              to="/map"
-              className="hidden sm:inline-flex items-center gap-1.5 rounded-full charge-button px-4 py-2 text-xs sm:text-sm font-bold hover:opacity-95 transition shadow-md shadow-accent/20"
-            >
-              <span>🗺️ Open Map</span>
-            </Link>
-            <Link
-              to="/stations"
-              className="rounded-full charge-button px-4 py-2 text-xs sm:text-sm font-bold hover:opacity-95 transition shadow-md shadow-accent/20"
-            >
-              Find a charger
-            </Link>
           </div>
         </header>
 
@@ -69,13 +84,25 @@ export function SiteChrome({ children }: { children: ReactNode }) {
             <ThemeToggle className="size-7 rounded-lg text-xs" />
           </div>
           <div className="flex flex-wrap gap-6 text-xs sm:text-sm font-medium">
-            <Link to="/map" className="text-accent hover:underline">
-              Live Map
+            <Link
+              to="/map"
+              className={`transition ${isMapActive ? "text-accent font-bold underline" : "text-frost/70 hover:text-foreground"}`}
+            >
+              Map View
             </Link>
-            <Link to="/stations" className="hover:text-foreground transition">
-              Stations Directory
+            <Link
+              to="/stations"
+              className={`transition ${isListActive ? "text-accent font-bold underline" : "text-frost/70 hover:text-foreground"}`}
+            >
+              List View
             </Link>
-            <Link to="/stations" className="hover:text-foreground transition">
+            <Link
+              to="/connectors"
+              className={`transition ${isConnectorsActive ? "text-accent font-bold underline" : "text-frost/70 hover:text-foreground"}`}
+            >
+              Connector Guide
+            </Link>
+            <Link to="/stations" className="text-frost/70 hover:text-foreground transition">
               Support
             </Link>
           </div>

@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ConnectorsRouteImport } from './routes/connectors'
 import { Route as MapRouteImport } from './routes/map'
 import { Route as StationsRouteImport } from './routes/stations'
 import { Route as StationStationIdRouteImport } from './routes/station.$stationId'
@@ -17,6 +18,11 @@ import { Route as StationStationIdRouteImport } from './routes/station.$stationI
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConnectorsRoute = ConnectorsRouteImport.update({
+  id: '/connectors',
+  path: '/connectors',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MapRoute = MapRouteImport.update({
@@ -37,12 +43,14 @@ const StationStationIdRoute = StationStationIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/connectors': typeof ConnectorsRoute
   '/map': typeof MapRoute
   '/stations': typeof StationsRoute
   '/station/$stationId': typeof StationStationIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/connectors': typeof ConnectorsRoute
   '/map': typeof MapRoute
   '/stations': typeof StationsRoute
   '/station/$stationId': typeof StationStationIdRoute
@@ -50,20 +58,28 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/connectors': typeof ConnectorsRoute
   '/map': typeof MapRoute
   '/stations': typeof StationsRoute
   '/station/$stationId': typeof StationStationIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/map' | '/stations' | '/station/$stationId'
+  fullPaths: '/' | '/connectors' | '/map' | '/stations' | '/station/$stationId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/map' | '/stations' | '/station/$stationId'
-  id: '__root__' | '/' | '/map' | '/stations' | '/station/$stationId'
+  to: '/' | '/connectors' | '/map' | '/stations' | '/station/$stationId'
+  id:
+    | '__root__'
+    | '/'
+    | '/connectors'
+    | '/map'
+    | '/stations'
+    | '/station/$stationId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ConnectorsRoute: typeof ConnectorsRoute
   MapRoute: typeof MapRoute
   StationsRoute: typeof StationsRoute
   StationStationIdRoute: typeof StationStationIdRoute
@@ -76,6 +92,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/connectors': {
+      id: '/connectors'
+      path: '/connectors'
+      fullPath: '/connectors'
+      preLoaderRoute: typeof ConnectorsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/map': {
@@ -104,6 +127,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ConnectorsRoute: ConnectorsRoute,
   MapRoute: MapRoute,
   StationsRoute: StationsRoute,
   StationStationIdRoute: StationStationIdRoute,
