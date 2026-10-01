@@ -102,9 +102,6 @@ export function SiteChrome({ children }: { children: ReactNode }) {
             >
               Connector Guide
             </Link>
-            <Link to="/stations" className="text-frost/70 hover:text-foreground transition">
-              Support
-            </Link>
           </div>
           <span>© 2026 EvFinder Energy</span>
         </footer>

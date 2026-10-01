@@ -19,10 +19,12 @@ interface StationFilterPanelProps {
 }
 
 const CONNECTORS = [
-  { id: "CCS2", label: "CCS2 (DC Fast)", desc: "Standard 4-wheeler DC" },
-  { id: "Type 2 AC", label: "Type 2 AC", desc: "AC Destination / Home" },
+  { id: "CCS2", label: "CCS2", desc: "Standard 4-wheeler DC Fast" },
+  { id: "Type 2 AC", label: "Type 2 AC", desc: "AC Wallbox / Destination" },
+  { id: "Bharat DC-001", label: "Bharat DC / GB/T", desc: "15kW–60kW Commercial Fleet DC" },
+  { id: "Bharat AC-001", label: "15A Socket / AC-001", desc: "Standard 15A 3-Pin / 2W & 3W" },
+  { id: "LECCS", label: "LECCS (Ather 2W)", desc: "Light EV Combined AC/DC Fast" },
   { id: "CHAdeMO", label: "CHAdeMO", desc: "DC Fast Quick Charge" },
-  { id: "Bharat DC-001", label: "Bharat DC-001", desc: "15kW DC Standard" },
 ];
 
 const SPEED_TIERS = [

@@ -1,11 +1,12 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { SiteChrome } from "../components/SiteChrome";
 import { StationCard } from "../components/StationCard";
 import { StationFilterPanel, StationFiltersState } from "../components/StationFilterPanel";
 import { StationDetailModal } from "../components/StationDetailModal";
-import { Station } from "../data/stations";
+import { Station, cityCoordinates } from "../data/stations";
 import { useStations } from "../hooks/useStations";
+import { matchesConnector, calculateDistanceKm, getClosestCity } from "../lib/utils";
 
 type StationSearch = {
   city?: string | undefined;
@@ -52,8 +53,30 @@ function StationsPage() {
 
   const [selectedStationId, setSelectedStationId] = useState<string | null>(null);
   const [projectedStation, setProjectedStation] = useState<Station | null>(null);
+  const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 24;
+
+  // Automatically detect user location if no city is chosen
+  useEffect(() => {
+    if (typeof window !== "undefined" && navigator.geolocation && !search.city) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude, longitude } = pos.coords;
+          setUserCoords({ lat: latitude, lng: longitude });
+          const closest = getClosestCity(latitude, longitude, cityCoordinates);
+          if (closest && !search.city) {
+            setFilter({ city: closest });
+          }
+        },
+        () => {},
+        { timeout: 8000, enableHighAccuracy: true }
+      );
+    }
+  }, [search.city]);
 
   const setFilter = (patch: Partial<StationSearch>) => {
+    setPage(1);
     navigate({
       search: (prev: any) => {
         const updated: any = { ...prev, ...patch };
@@ -94,7 +117,7 @@ function StationsPage() {
       }
 
       // 3. Connector Type
-      if (search.connector && !s.connectors.includes(search.connector)) return false;
+      if (search.connector && !matchesConnector(s.connectors, search.connector, s.network)) return false;
 
       // 4. Charging Speed / Min Power (kW)
       if (search.power && s.maxPowerKw < Number(search.power)) return false;
@@ -112,6 +135,16 @@ function StationsPage() {
     search.power,
     search.network,
   ]);
+
+  // If user GPS is available, sort nearest first
+  const sortedResults = useMemo(() => {
+    if (!userCoords) return results;
+    return [...results].sort((a, b) => {
+      const distA = calculateDistanceKm(userCoords.lat, userCoords.lng, a.lat, a.lng);
+      const distB = calculateDistanceKm(userCoords.lat, userCoords.lng, b.lat, b.lng);
+      return distA - distB;
+    });
+  }, [results, userCoords]);
 
   return (
     <SiteChrome>
@@ -185,16 +218,16 @@ function StationsPage() {
               filters={search as StationFiltersState}
               onFilterChange={setFilter}
               onReset={resetFilters}
-              totalResults={results.length}
+              totalResults={sortedResults.length}
               totalAllStations={stations.length}
             />
           </aside>
 
-          {/* Right: Stations Grid */}
+            {/* Right: Stations Grid */}
           <div>
             <div className="flex items-center justify-between mb-5">
               <p className="text-sm font-bold text-frost">
-                Showing {results.length} of {stations.length} live station{results.length === 1 ? "" : "s"}
+                Showing {Math.min((page - 1) * PAGE_SIZE + 1, sortedResults.length)}–{Math.min(page * PAGE_SIZE, sortedResults.length)} of {sortedResults.length} live station{sortedResults.length === 1 ? "" : "s"}
                 {search.city ? ` in ${search.city}` : " across All India"}
               </p>
               {(search.city ||
@@ -211,7 +244,7 @@ function StationsPage() {
               )}
             </div>
 
-            {results.length === 0 ? (
+            {sortedResults.length === 0 ? (
               <div className="rounded-2xl glass-panel-subtle p-12 text-center text-frost">
                 <div className="text-3xl mb-3">⚡</div>
                 <p className="font-bold text-foreground text-base">No stations found matching filters</p>
@@ -224,25 +257,58 @@ function StationsPage() {
                 </button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-                {results.map((s) => (
-                  <div
-                    key={s.id}
-                    onMouseEnter={() => setSelectedStationId(s.id)}
-                    className={`transition rounded-2xl ${
-                      selectedStationId === s.id ? "ring-2 ring-accent scale-[1.01]" : ""
-                    }`}
-                  >
-                    <StationCard
-                      station={s}
-                      onSelect={(st) => {
-                        setSelectedStationId(st.id);
-                        setProjectedStation(st);
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                  {sortedResults.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((s) => (
+                    <div
+                      key={s.id}
+                      onMouseEnter={() => setSelectedStationId(s.id)}
+                      className={`transition rounded-2xl ${
+                        selectedStationId === s.id ? "ring-2 ring-accent scale-[1.01]" : ""
+                      }`}
+                    >
+                      <StationCard
+                        station={s}
+                        onSelect={(st) => {
+                          setSelectedStationId(st.id);
+                          setProjectedStation(st);
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                {/* Pagination Controls */}
+                {Math.ceil(results.length / PAGE_SIZE) > 1 && (
+                  <div className="mt-8 flex flex-wrap items-center justify-center gap-2 pt-6 border-t border-border/60">
+                    <button
+                      onClick={() => {
+                        setPage((p) => Math.max(1, p - 1));
+                        window.scrollTo({ top: 0, behavior: "smooth" });
                       }}
-                    />
+                      disabled={page === 1}
+                      className="px-4 py-2 rounded-xl text-xs font-bold border border-border bg-ink2/50 text-frost hover:text-foreground disabled:opacity-30 disabled:pointer-events-none transition"
+                    >
+                      ← Previous
+                    </button>
+
+                    <span className="px-3 py-2 text-xs font-bold text-frost">
+                      Page {page} of {Math.ceil(results.length / PAGE_SIZE)}
+                    </span>
+
+                    <button
+                      onClick={() => {
+                        setPage((p) => Math.min(Math.ceil(results.length / PAGE_SIZE), p + 1));
+                        window.scrollTo({ top: 0, behavior: "smooth" });
+                      }}
+                      disabled={page >= Math.ceil(results.length / PAGE_SIZE)}
+                      className="px-4 py-2 rounded-xl text-xs font-bold border border-border bg-ink2/50 text-frost hover:text-foreground disabled:opacity-30 disabled:pointer-events-none transition"
+                    >
+                      Next →
+                    </button>
                   </div>
-                ))}
-              </div>
+                )}
+              </>
             )}
           </div>
         </div>

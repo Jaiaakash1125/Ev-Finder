@@ -6,6 +6,7 @@ import { StationFilterPanel, StationFiltersState } from "../components/StationFi
 import { StationDetailModal } from "../components/StationDetailModal";
 import { cityCoordinates, statusMeta, Station } from "../data/stations";
 import { useStations } from "../hooks/useStations";
+import { matchesConnector } from "../lib/utils";
 
 type MapSearch = {
   city?: string | undefined;
@@ -69,6 +70,7 @@ function LiveMapPage() {
   const [projectedStation, setProjectedStation] = useState<Station | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [sidebarTab, setSidebarTab] = useState<"stations" | "filters">("stations");
+  const [visibleCount, setVisibleCount] = useState(40);
 
   const setFilter = (patch: Partial<MapSearch>) => {
     navigate({
@@ -118,7 +120,7 @@ function LiveMapPage() {
       }
 
       // 3. Connector
-      if (search.connector && !s.connectors.includes(search.connector)) return false;
+      if (search.connector && !matchesConnector(s.connectors, search.connector, s.network)) return false;
 
       // 4. Charging Speed / Min Power (kW)
       if (search.power && s.maxPowerKw < Number(search.power)) return false;
@@ -341,78 +343,91 @@ function LiveMapPage() {
                         </button>
                       </div>
                     ) : (
-                      filteredStations.map((station) => {
-                        const isSelected =
-                          selectedStation?.id === station.id || search.stationId === station.id;
-                        const meta = statusMeta[station.status];
-                        const googleMapsUrl =
-                          (station as any).google_maps_link ||
-                          `https://www.google.com/maps/dir/?api=1&destination=${station.lat},${station.lng}`;
+                      <>
+                        {filteredStations.slice(0, visibleCount).map((station) => {
+                          const isSelected =
+                            selectedStation?.id === station.id || search.stationId === station.id;
+                          const meta = statusMeta[station.status];
+                          const googleMapsUrl =
+                            (station as any).google_maps_link ||
+                            `https://www.google.com/maps/dir/?api=1&destination=${station.lat},${station.lng}`;
 
-                        return (
-                          <div
-                            key={station.id}
-                            onClick={() => handleSelectStation(station)}
-                            className={`rounded-2xl border p-4 cursor-pointer transition text-left relative group ${
-                              isSelected
-                                ? "border-accent bg-accent/15 shadow-xl shadow-accent/10 ring-2 ring-accent/40"
-                                : "border-border/70 bg-ink2/50 hover:border-accent/40 hover:bg-ink2/80"
-                            }`}
-                          >
-                            <div className="flex items-center justify-between gap-2 mb-1.5">
-                              <span className="text-[11px] uppercase font-bold text-accent bg-accent/10 px-2.5 py-0.5 rounded-md border border-accent/30">
-                                {station.network}
-                              </span>
-                              <span className="text-xs text-frost/70 font-semibold">
-                                📍 {station.city}
-                              </span>
+                          return (
+                            <div
+                              key={station.id}
+                              onClick={() => handleSelectStation(station)}
+                              className={`rounded-2xl border p-4 cursor-pointer transition text-left relative group ${
+                                isSelected
+                                  ? "border-accent bg-accent/15 shadow-xl shadow-accent/10 ring-2 ring-accent/40"
+                                  : "border-border/70 bg-ink2/50 hover:border-accent/40 hover:bg-ink2/80"
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-2 mb-1.5">
+                                <span className="text-[11px] uppercase font-bold text-accent bg-accent/10 px-2.5 py-0.5 rounded-md border border-accent/30">
+                                  {station.network}
+                                </span>
+                                <span className="text-xs text-frost/70 font-semibold">
+                                  📍 {station.city}
+                                </span>
+                              </div>
+
+                              <h3 className="font-display text-base font-extrabold text-foreground group-hover:text-accent transition leading-tight mt-1">
+                                {station.name}
+                              </h3>
+                              <p className="text-xs text-frost/80 line-clamp-2 mt-1 leading-relaxed">
+                                {station.address}
+                              </p>
+
+                              <div className="mt-3 flex items-center justify-between text-xs pt-2.5 border-t border-border/50">
+                                <span className="font-bold text-foreground bg-ink2 px-2.5 py-1 rounded-lg border border-border/60">
+                                  ⚡ {station.maxPowerKw} kW
+                                </span>
+                                <span className="font-bold text-frost bg-ink2 px-2.5 py-1 rounded-lg border border-border/60">
+                                  🔌 {station.totalPorts} Ports
+                                </span>
+                              </div>
+
+                              {/* Direct Big Action Buttons */}
+                              <div className="mt-3.5 pt-2.5 border-t border-border/40 flex flex-col gap-2">
+                                <a
+                                  href={googleMapsUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="w-full rounded-xl charge-button py-2.5 px-3 text-xs sm:text-sm font-extrabold text-center transition flex items-center justify-center gap-2 shadow-md shadow-accent/20 hover:scale-[1.01] active:scale-[0.99] whitespace-nowrap"
+                                >
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="shrink-0">
+                                    <polygon points="3 11 22 2 13 21 11 13 3 11" />
+                                  </svg>
+                                  <span>Get Directions ↗</span>
+                                </a>
+
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setProjectedStation(station);
+                                  }}
+                                  className="w-full rounded-xl charge-button py-2.5 px-3 text-xs sm:text-sm font-extrabold text-center transition flex items-center justify-center gap-1.5 shadow-md shadow-accent/20 hover:scale-[1.01] active:scale-[0.99] whitespace-nowrap"
+                                >
+                                  <span>View Station Details</span>
+                                  <span>→</span>
+                                </button>
+                              </div>
                             </div>
+                          );
+                        })}
 
-                            <h3 className="font-display text-base font-extrabold text-foreground group-hover:text-accent transition leading-tight mt-1">
-                              {station.name}
-                            </h3>
-                            <p className="text-xs text-frost/80 line-clamp-2 mt-1 leading-relaxed">
-                              {station.address}
-                            </p>
-
-                            <div className="mt-3 flex items-center justify-between text-xs pt-2.5 border-t border-border/50">
-                              <span className="font-bold text-foreground bg-ink2 px-2.5 py-1 rounded-lg border border-border/60">
-                                ⚡ {station.maxPowerKw} kW
-                              </span>
-                              <span className="font-bold text-frost bg-ink2 px-2.5 py-1 rounded-lg border border-border/60">
-                                🔌 {station.totalPorts} Ports
-                              </span>
-                            </div>
-
-                            {/* Direct Big Action Buttons */}
-                            <div className="mt-3.5 pt-2.5 border-t border-border/40 flex flex-col gap-2">
-                              <a
-                                href={googleMapsUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={(e) => e.stopPropagation()}
-                                className="w-full rounded-xl charge-button py-2.5 px-3 text-xs sm:text-sm font-extrabold text-center transition flex items-center justify-center gap-2 shadow-md shadow-accent/20 hover:scale-[1.01] active:scale-[0.99] whitespace-nowrap"
-                              >
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="shrink-0">
-                                  <polygon points="3 11 22 2 13 21 11 13 3 11" />
-                                </svg>
-                                <span>Get Directions ↗</span>
-                              </a>
-
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setProjectedStation(station);
-                                }}
-                                className="w-full rounded-xl charge-button py-2.5 px-3 text-xs sm:text-sm font-extrabold text-center transition flex items-center justify-center gap-1.5 shadow-md shadow-accent/20 hover:scale-[1.01] active:scale-[0.99] whitespace-nowrap"
-                              >
-                                <span>View Station Details</span>
-                                <span>→</span>
-                              </button>
-                            </div>
+                        {filteredStations.length > visibleCount && (
+                          <div className="pt-2 pb-4 text-center">
+                            <button
+                              onClick={() => setVisibleCount((prev) => prev + 40)}
+                              className="w-full py-2.5 px-4 rounded-xl border border-accent/40 bg-accent/10 text-accent hover:bg-accent/20 font-bold text-xs transition"
+                            >
+                              Load More Stations ({filteredStations.length - visibleCount} remaining) ↓
+                            </button>
                           </div>
-                        );
-                      })
+                        )}
+                      </>
                     )}
                   </div>
                 </div>

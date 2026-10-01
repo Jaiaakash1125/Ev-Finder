@@ -255,20 +255,10 @@ html[data-theme="light"] .leaflet-container {
   background: #e2e8f0 !important;
 }
 
-/* Free OpenStreetMap Dark Mode without any API keys or watermarks */
-.leaflet-tile-pane.dark-tile-mode .leaflet-tile,
-.dark .leaflet-tile-pane .leaflet-tile {
-  filter: brightness(0.65) invert(1) contrast(3.2) hue-rotate(200deg) saturate(0.35) brightness(0.75) !important;
-}
-
-.light .leaflet-tile-pane .leaflet-tile,
-.leaflet-tile-pane.light-tile-mode .leaflet-tile {
+/* Natural, high-clarity crisp map tiles with authentic greenery, water, and road colors */
+.leaflet-tile-pane .leaflet-tile {
   filter: none !important;
-}
-
-/* Satellite view should always remain unfiltered */
-.leaflet-tile-pane.satellite-mode .leaflet-tile {
-  filter: none !important;
+  image-rendering: -webkit-optimize-contrast;
 }
 
 .leaflet-popup-content-wrapper {

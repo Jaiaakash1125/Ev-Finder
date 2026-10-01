@@ -1,28 +1,41 @@
-import React, { useEffect, useRef, useState, useId } from "react";
+import React, { useEffect, useRef, useState, useId, useCallback } from "react";
 import type * as LType from "leaflet";
 import { Station, stations as allStations, INDIA_CENTER, cityCoordinates, statusMeta } from "../data/stations";
 import { useTheme } from "../lib/theme";
+import { getClosestCity } from "../lib/utils";
 
-export type TileStyle = "osm" | "hot" | "satellite";
+export type TileStyle = "streets" | "satellite" | "osm";
 
-const TILE_LAYERS: Record<TileStyle, { url: string; subdomains: string[]; name: string; attribution: string }> = {
-  osm: {
-    name: "OpenStreetMap",
-    url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-    subdomains: ["a", "b", "c"],
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-  },
-  hot: {
-    name: "Humanitarian (HOT)",
+const TILE_LAYERS: Record<
+  TileStyle,
+  {
+    name: string;
+    url: string;
+    subdomains: string[];
+    attribution: string;
+    maxZoom: number;
+  }
+> = {
+  streets: {
+    name: "Detailed Streets",
     url: "https://a.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png",
     subdomains: ["a", "b"],
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, <a href="https://www.hotosm.org/">HOT</a>',
+    maxZoom: 19,
   },
   satellite: {
-    name: "Satellite (Esri)",
+    name: "Satellite",
     url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
     subdomains: [],
     attribution: '&copy; <a href="https://www.esri.com/">Esri</a>, Earthstar Geographics',
+    maxZoom: 19,
+  },
+  osm: {
+    name: "Standard OSM",
+    url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+    subdomains: ["a", "b", "c"],
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    maxZoom: 19,
   },
 };
 
@@ -71,7 +84,7 @@ export function IndiaEvMap({
   const rangeCircleRef = useRef<LType.Circle | null>(null);
 
   const { resolvedTheme } = useTheme();
-  const [activeTile, setActiveTile] = useState<TileStyle>("osm");
+  const [activeTile, setActiveTile] = useState<TileStyle>("streets");
 
   const [currentCity, setCurrentCity] = useState<string>(controlledCity || "All India");
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
@@ -156,33 +169,38 @@ export function IndiaEvMap({
         center: initialCenter,
         zoom: initialZoom,
         minZoom: 4,
-        maxZoom: 18,
+        maxZoom: 19,
         zoomControl: false,
         attributionControl: true,
       });
 
       L.control.zoom({ position: "bottomright" }).addTo(map);
 
-      // Tile layer
+      // High-speed CDN Tile layer
       const layerConfig = TILE_LAYERS[activeTile];
       const tileLayer = L.tileLayer(layerConfig.url, {
         attribution: layerConfig.attribution,
         subdomains: layerConfig.subdomains,
-        maxZoom: 19,
-        className: activeTile === "satellite" ? "satellite-tile" : "",
+        maxZoom: layerConfig.maxZoom,
+        keepBuffer: 6,
+        updateWhenIdle: false,
+        updateWhenZooming: true,
       }).addTo(map);
 
       tileLayerRef.current = tileLayer;
-
-      // Update pane class for dark mode filter
-      updateTilePaneClasses(container, activeTile, resolvedTheme);
 
       // Group for markers
       const markersGroup = L.layerGroup().addTo(map);
       markersGroupRef.current = markersGroup;
       mapInstanceRef.current = map;
 
-      // Render markers
+      // Event listener for viewport changes
+      map.on("moveend", () => {
+        if (!mapInstanceRef.current || !markersGroupRef.current) return;
+        renderMarkers(L, mapInstanceRef.current, markersGroupRef.current, stations, resolvedTheme);
+      });
+
+      // Render initial markers
       renderMarkers(L, map, markersGroup, stations, resolvedTheme);
 
       // India bounds constraint if whole country
@@ -196,6 +214,9 @@ export function IndiaEvMap({
       // If a specific city was passed initially, zoom to it
       if (controlledCity && controlledCity !== "All India") {
         flyToCity(controlledCity);
+      } else if (enableLocateMe && !singleStationMode && !selectedStationId) {
+        // Automatically extract user location and display their area chargers
+        handleLocateMe();
       }
     }
 
@@ -210,27 +231,6 @@ export function IndiaEvMap({
     };
   }, [isMounted, mapContainerId]);
 
-  function updateTilePaneClasses(
-    container: HTMLElement | null,
-    tile: TileStyle,
-    theme: "dark" | "light"
-  ) {
-    if (!container) return;
-    const tilePane = container.querySelector(".leaflet-tile-pane") as HTMLElement | null;
-    if (tilePane) {
-      if (tile === "satellite") {
-        tilePane.classList.remove("dark-tile-mode", "light-tile-mode");
-        tilePane.classList.add("satellite-mode");
-      } else if (theme === "dark") {
-        tilePane.classList.remove("light-tile-mode", "satellite-mode");
-        tilePane.classList.add("dark-tile-mode");
-      } else {
-        tilePane.classList.remove("dark-tile-mode", "satellite-mode");
-        tilePane.classList.add("light-tile-mode");
-      }
-    }
-  }
-
   // Update tile style when switched
   useEffect(() => {
     if (!mapInstanceRef.current) return;
@@ -243,15 +243,14 @@ export function IndiaEvMap({
       const tileLayer = L.tileLayer(layerConfig.url, {
         attribution: layerConfig.attribution,
         subdomains: layerConfig.subdomains,
-        maxZoom: 19,
-        className: activeTile === "satellite" ? "satellite-tile" : "",
+        maxZoom: layerConfig.maxZoom,
+        keepBuffer: 6,
+        updateWhenIdle: false,
+        updateWhenZooming: true,
       }).addTo(mapInstanceRef.current);
       tileLayerRef.current = tileLayer;
-
-      const container = document.getElementById(`map-${mapContainerId}`);
-      updateTilePaneClasses(container, activeTile, resolvedTheme);
     });
-  }, [activeTile, resolvedTheme, mapContainerId]);
+  }, [activeTile]);
 
   // Update markers when stations, selection, or theme change
   useEffect(() => {
@@ -299,7 +298,7 @@ export function IndiaEvMap({
     });
   }, [rangeKm, userLocation, activeStation, initialCenter, resolvedTheme]);
 
-  // Marker creation helper
+  // Marker creation helper with viewport-based virtualization
   function renderMarkers(
     L: typeof import("leaflet"),
     map: LType.Map,
@@ -308,10 +307,36 @@ export function IndiaEvMap({
     currentTheme: "dark" | "light"
   ) {
     group.clearLayers();
+    if (!stationList || stationList.length === 0) return;
+
     const isLight = currentTheme === "light";
     const accentColor = isLight ? "#0284c7" : "#38bdf8";
 
-    stationList.forEach((station) => {
+    // 1. Get current map bounding box (with 15% padding for smooth panning)
+    let visibleStations = stationList;
+    try {
+      const bounds = map.getBounds().pad(0.15);
+      visibleStations = stationList.filter((s) => bounds.contains([s.lat, s.lng]));
+    } catch {
+      visibleStations = stationList;
+    }
+
+    // 2. High-performance marker sampling when zoomed out at country/state level
+    const MAX_VISIBLE_MARKERS = 350;
+    if (visibleStations.length > MAX_VISIBLE_MARKERS) {
+      const step = Math.ceil(visibleStations.length / MAX_VISIBLE_MARKERS);
+      const sampled = visibleStations.filter((_, idx) => idx % step === 0);
+      // Ensure the actively selected station is included
+      if (selectedStationId) {
+        const selected = stationList.find((s) => s.id === selectedStationId);
+        if (selected && !sampled.some((s) => s.id === selected.id)) {
+          sampled.push(selected);
+        }
+      }
+      visibleStations = sampled;
+    }
+
+    visibleStations.forEach((station) => {
       const isSelected = selectedStationId === station.id;
       const googleMapsUrl = (station as any).google_maps_link || `https://www.google.com/maps/dir/?api=1&destination=${station.lat},${station.lng}`;
 
@@ -418,8 +443,8 @@ export function IndiaEvMap({
   }
 
   // HTML5 Geolocation Locate Me
-  const handleLocateMe = () => {
-    if (!navigator.geolocation) {
+  const handleLocateMe = useCallback(() => {
+    if (typeof window === "undefined" || !navigator.geolocation) {
       setLocationError("Geolocation is not supported by your browser.");
       return;
     }
@@ -433,6 +458,14 @@ export function IndiaEvMap({
         const { latitude, longitude } = position.coords;
         const coords: [number, number] = [latitude, longitude];
         setUserLocation(coords);
+
+        const closest = getClosestCity(latitude, longitude, cityCoordinates);
+        if (closest) {
+          setCurrentCity(closest);
+          if (onCityChange) {
+            onCityChange(closest);
+          }
+        }
 
         if (mapInstanceRef.current) {
           import("leaflet").then((L) => {
@@ -464,26 +497,36 @@ export function IndiaEvMap({
       },
       (error) => {
         setIsLocating(false);
-        setLocationError("Could not access your location. Showing default Indian grid.");
-        handleCitySelect("Bengaluru");
+        // Fallback gracefully without aggressive alerts
       },
       { timeout: 10000, enableHighAccuracy: true }
     );
-  };
+  }, [onCityChange]);
 
   const handleResetView = () => {
     handleCitySelect("All India");
   };
 
+  const quickCities = ["Bengaluru", "Mumbai", "New Delhi", "Hyderabad", "Chennai", "Pune"];
+
   const allCityNames = React.useMemo(() => {
     const citySet = new Set<string>();
+    Object.keys(cityCoordinates).forEach((c) => citySet.add(c));
     stations.forEach((s) => {
-      if (s.city && s.city.trim() && s.city.trim().toLowerCase() !== "unknown") {
-        citySet.add(s.city.trim());
+      const c = s.city?.trim();
+      if (
+        c &&
+        c.length >= 3 &&
+        c.length <= 25 &&
+        !/^\d+/.test(c) &&
+        !c.includes("+") &&
+        !c.includes("/") &&
+        !c.includes("\\") &&
+        !/dealer|service|station|industrial|highway|toll|sector|opposite|petroleum|plot|near/i.test(c)
+      ) {
+        citySet.add(c);
       }
     });
-    // Add preset coordinate cities
-    Object.keys(cityCoordinates).forEach((c) => citySet.add(c));
     return Array.from(citySet).sort();
   }, [stations]);
 
@@ -533,7 +576,7 @@ export function IndiaEvMap({
           </button>
 
           {/* Quick city pill buttons for top hubs */}
-          {allCityNames.slice(0, 5).map((city) => {
+          {quickCities.map((city) => {
             const count = cityStationCounts[city];
             return (
               <button
@@ -584,26 +627,15 @@ export function IndiaEvMap({
           {showLayerSelector && (
             <div className="flex items-center rounded-xl border border-border bg-ink2/90 backdrop-blur-md p-1 shadow-lg">
               <button
-                title="OpenStreetMap Standard"
-                onClick={() => setActiveTile("osm")}
+                title="Detailed Streets (Fast CDN)"
+                onClick={() => setActiveTile("streets")}
                 className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition ${
-                  activeTile === "osm"
+                  activeTile === "streets"
                     ? "bg-primary text-primary-foreground shadow"
                     : "text-frost hover:text-foreground"
                 }`}
               >
-                OSM
-              </button>
-              <button
-                title="Humanitarian OpenStreetMap (HOT)"
-                onClick={() => setActiveTile("hot")}
-                className={`hidden sm:block px-2.5 py-1 text-xs font-semibold rounded-lg transition ${
-                  activeTile === "hot"
-                    ? "bg-primary text-primary-foreground shadow"
-                    : "text-frost hover:text-foreground"
-                }`}
-              >
-                HOT
+                Streets
               </button>
               <button
                 title="Satellite Imagery"
@@ -614,7 +646,18 @@ export function IndiaEvMap({
                     : "text-frost hover:text-foreground"
                 }`}
               >
-                Sat
+                Satellite
+              </button>
+              <button
+                title="OpenStreetMap Standard"
+                onClick={() => setActiveTile("osm")}
+                className={`hidden sm:block px-2.5 py-1 text-xs font-semibold rounded-lg transition ${
+                  activeTile === "osm"
+                    ? "bg-primary text-primary-foreground shadow"
+                    : "text-frost hover:text-foreground"
+                }`}
+              >
+                OSM
               </button>
             </div>
           )}

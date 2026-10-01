@@ -1,11 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { SiteChrome } from "../components/SiteChrome";
 import { StationCard } from "../components/StationCard";
 import { IndiaEvMap } from "../components/IndiaEvMap";
 import { StationDetailModal } from "../components/StationDetailModal";
 import { cities, cityCoordinates, Station, MAJOR_CITIES, TOP_CITIES } from "../data/stations";
 import { useStations } from "../hooks/useStations";
+import { calculateDistanceKm, getClosestCity } from "../lib/utils";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -31,6 +32,29 @@ function Index() {
   const { stations, isLiveDb } = useStations();
   const [selectedCity, setSelectedCity] = useState<string>("Bengaluru");
   const [projectedStation, setProjectedStation] = useState<Station | null>(null);
+  const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [isAutoLocated, setIsAutoLocated] = useState(false);
+
+  // Automatically detect user location and switch to their local area immediately
+  useEffect(() => {
+    if (typeof window !== "undefined" && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude, longitude } = pos.coords;
+          setUserCoords({ lat: latitude, lng: longitude });
+          const closest = getClosestCity(latitude, longitude, cityCoordinates);
+          if (closest) {
+            setSelectedCity(closest);
+            setIsAutoLocated(true);
+          }
+        },
+        () => {
+          // Graceful fallback to default if user denies permission
+        },
+        { timeout: 8000, enableHighAccuracy: true }
+      );
+    }
+  }, []);
 
   // Clean, curated list of major Indian cities
   const allCityNames = React.useMemo(() => {
@@ -52,18 +76,29 @@ function Index() {
   }, [stations]);
 
   const nearby = useMemo(() => {
-    if (selectedCity === "All India") {
-      return stations;
+    let list = stations;
+    if (selectedCity !== "All India") {
+      const q = selectedCity.toLowerCase();
+      list = stations.filter(
+        (s) =>
+          s.city.toLowerCase() === q ||
+          s.city.toLowerCase().includes(q) ||
+          s.address.toLowerCase().includes(q) ||
+          s.name.toLowerCase().includes(q)
+      );
     }
-    const q = selectedCity.toLowerCase();
-    return stations.filter(
-      (s) =>
-        s.city.toLowerCase() === q ||
-        s.city.toLowerCase().includes(q) ||
-        s.address.toLowerCase().includes(q) ||
-        s.name.toLowerCase().includes(q)
-    );
-  }, [stations, selectedCity]);
+
+    // If user GPS is available, sort nearest first
+    if (userCoords) {
+      return [...list].sort((a, b) => {
+        const distA = calculateDistanceKm(userCoords.lat, userCoords.lng, a.lat, a.lng);
+        const distB = calculateDistanceKm(userCoords.lat, userCoords.lng, b.lat, b.lng);
+        return distA - distB;
+      });
+    }
+
+    return list;
+  }, [stations, selectedCity, userCoords]);
 
   const displayStations = nearby.length > 0 ? nearby.slice(0, 3) : stations.slice(0, 3);
 
@@ -149,7 +184,7 @@ function Index() {
       {/* Metrics Section */}
       <section className="px-6 sm:px-8 lg:px-14 py-4 flex flex-wrap gap-4">
         {[
-          { v: "800+", l: "Pinned charging locations" },
+          { v: "8,000+", l: "Pinned charging locations" },
           { v: "28", l: "States & UTs covered" },
           { v: "100%", l: "Free & open map data" },
         ].map((s) => (

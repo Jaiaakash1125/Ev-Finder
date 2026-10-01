@@ -116,7 +116,7 @@ export const CONNECTORS_DATA: ConnectorInfo[] = [
       "Slow for highway travel stops (typically 3.3 kW, 7.2 kW, or 11 kW onboard limit)",
       "Requires EV's onboard AC-to-DC converter to dictate charge speed",
     ],
-    filterQuery: "Type 2",
+    filterQuery: "Type 2 AC",
   },
   {
     id: "gbt",
@@ -150,7 +150,7 @@ export const CONNECTORS_DATA: ConnectorInfo[] = [
       "Phased out in newer private passenger vehicles in favor of CCS2",
       "Incompatible with standard private CCS2 cars without expensive adapters",
     ],
-    filterQuery: "GB/T",
+    filterQuery: "Bharat DC-001",
   },
   {
     id: "leccs",
@@ -185,7 +185,7 @@ export const CONNECTORS_DATA: ConnectorInfo[] = [
       "Exclusively designed for 2-wheelers & 3-wheelers; cannot charge 4W cars",
       "Legacy 2W models (Ola S1, TVS iQube) still utilize proprietary or 15A plugs",
     ],
-    filterQuery: "Ather",
+    filterQuery: "LECCS",
   },
   {
     id: "chademo",
@@ -253,7 +253,7 @@ export const CONNECTORS_DATA: ConnectorInfo[] = [
       "Slowest charging method (typically delivers 2.5 kW to 3.3 kW)",
       "Requires verified, dedicated copper earthing to avoid EVSE grounding error faults",
     ],
-    filterQuery: "15A",
+    filterQuery: "Bharat AC-001",
   },
 ];
 
