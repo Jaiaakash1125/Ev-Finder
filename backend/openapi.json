@@ -2,21 +2,40 @@
   "openapi": "3.0.3",
   "info": {
     "title": "India EV Finder REST API",
-    "description": "Authenticated REST API for discovery, navigation, slot reservations, route planning, and vehicle management across EV charging stations in India.",
     "version": "1.0.0",
-    "contact": {
-      "name": "EV Finder Mobile API Team",
-      "url": "https://github.com/Jaiaakash1125/Ev-Finder"
-    }
+    "description": "REST API for the India EV Finder mobile app: phone-OTP login with rotating refresh tokens, station discovery, garage, favorites, reservations, reviews and trip planning.\n\n**Auth flow:** `POST /auth/otp/send` → `POST /auth/otp/verify` returns `accessToken` (15 min) and `refreshToken` (30 days, single use). Send `Authorization: Bearer <accessToken>`. On `401 TOKEN_EXPIRED` call `POST /auth/refresh` and retry; store the *new* refresh token each time.\n\n**Errors:** every failure is `{ success: false, error: { code, message, details? }, requestId }`. Branch on `error.code`, not the message.\n\n**Reservations** are records in this API only; they are not enforced by charger operators."
   },
   "servers": [
     {
       "url": "http://localhost:5000/api/v1",
-      "description": "Local Development Server"
+      "description": "Local development"
     },
     {
-      "url": "https://api.evfinder.in/api/v1",
-      "description": "Production Cloud Server"
+      "url": "https://YOUR-API-HOST/api/v1",
+      "description": "Production (replace with your deployed host; HTTPS required for release builds)"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Auth"
+    },
+    {
+      "name": "User"
+    },
+    {
+      "name": "Stations"
+    },
+    {
+      "name": "Reviews"
+    },
+    {
+      "name": "Bookings"
+    },
+    {
+      "name": "Routes"
+    },
+    {
+      "name": "System"
     }
   ],
   "components": {
@@ -25,185 +44,1988 @@
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "JWT",
-        "description": "Enter your JWT Bearer token obtained from `/auth/otp/verify`"
+        "description": "Access token from /auth/otp/verify or /auth/refresh"
+      }
+    },
+    "responses": {
+      "Unauthorized": {
+        "description": "Missing, invalid or expired access token. `error.code` is UNAUTHENTICATED, INVALID_TOKEN or TOKEN_EXPIRED (refresh and retry).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "ValidationError": {
+        "description": "Request validation failed (VALIDATION_ERROR, INVALID_JSON, or a domain rule such as INVALID_PORT).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Resource not found.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Conflict": {
+        "description": "State conflict (SLOT_TAKEN, BOOKING_LIMIT, ALREADY_REVIEWED, VEHICLE_LIMIT, STATION_OFFLINE, BOOKING_NOT_CANCELLABLE).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "RateLimited": {
+        "description": "Too many requests. Honour the `Retry-After` header.",
+        "headers": {
+          "Retry-After": {
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Seconds to wait"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
       }
     },
     "schemas": {
-      "Station": {
+      "Error": {
         "type": "object",
         "properties": {
-          "id": { "type": "string" },
-          "name": { "type": "string" },
-          "network": { "type": "string" },
-          "city": { "type": "string" },
-          "state": { "type": "string" },
-          "address": { "type": "string" },
-          "pincode": { "type": "string" },
-          "lat": { "type": "number" },
-          "lng": { "type": "number" },
-          "distanceKm": { "type": "number" },
-          "status": { "type": "string", "enum": ["available", "limited", "busy", "offline"] },
-          "freePorts": { "type": "integer" },
-          "totalPorts": { "type": "integer" },
-          "connectors": { "type": "array", "items": { "type": "string" } },
-          "maxPowerKw": { "type": "integer" },
-          "pricePerKwh": { "type": "number" },
-          "hours": { "type": "string" },
-          "amenities": { "type": "array", "items": { "type": "string" } },
-          "rating": { "type": "number" },
-          "reviews": { "type": "integer" },
-          "isFavorite": { "type": "boolean" }
+          "success": {
+            "type": "boolean",
+            "example": false
+          },
+          "error": {
+            "type": "object",
+            "required": [
+              "code",
+              "message"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "VALIDATION_ERROR"
+              },
+              "message": {
+                "type": "string"
+              },
+              "details": {}
+            }
+          },
+          "requestId": {
+            "type": "string"
+          }
         }
       },
-      "User": {
+      "Tokens": {
         "type": "object",
         "properties": {
-          "id": { "type": "string" },
-          "phone": { "type": "string" },
-          "email": { "type": "string" },
-          "fullName": { "type": "string" },
-          "avatarUrl": { "type": "string" },
-          "vehicles": {
-            "type": "array",
-            "items": { "$ref": "#/components/schemas/Vehicle" }
+          "accessToken": {
+            "type": "string"
           },
-          "favorites": { "type": "array", "items": { "type": "string" } }
+          "refreshToken": {
+            "type": "string"
+          },
+          "tokenType": {
+            "type": "string",
+            "enum": [
+              "Bearer"
+            ]
+          },
+          "expiresIn": {
+            "type": "integer",
+            "description": "Access token lifetime, seconds",
+            "example": 900
+          },
+          "refreshExpiresIn": {
+            "type": "integer",
+            "description": "Refresh token lifetime, seconds",
+            "example": 2592000
+          }
         }
       },
       "Vehicle": {
         "type": "object",
         "properties": {
-          "id": { "type": "string" },
-          "brand": { "type": "string" },
-          "model": { "type": "string" },
-          "connectorType": { "type": "string" },
-          "batteryKwh": { "type": "number" },
-          "regNumber": { "type": "string" }
+          "id": {
+            "type": "string"
+          },
+          "brand": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "connectorType": {
+            "type": "string"
+          },
+          "batteryKwh": {
+            "type": "number"
+          },
+          "regNumber": {
+            "type": "string"
+          }
+        }
+      },
+      "VehicleInput": {
+        "type": "object",
+        "required": [
+          "brand",
+          "model",
+          "connectorType",
+          "batteryKwh"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "brand": {
+            "type": "string",
+            "maxLength": 50,
+            "example": "Tata"
+          },
+          "model": {
+            "type": "string",
+            "maxLength": 80,
+            "example": "Nexon EV"
+          },
+          "connectorType": {
+            "type": "string",
+            "maxLength": 30,
+            "example": "CCS2"
+          },
+          "batteryKwh": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 300,
+            "example": 40.5
+          },
+          "regNumber": {
+            "type": "string",
+            "maxLength": 20
+          }
+        }
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string",
+            "example": "+919876543210"
+          },
+          "email": {
+            "type": "string",
+            "nullable": true
+          },
+          "fullName": {
+            "type": "string"
+          },
+          "avatarUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "vehicles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Vehicle"
+            }
+          },
+          "favorites": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Station": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "network": {
+            "type": "string"
+          },
+          "city": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "pincode": {
+            "type": "string"
+          },
+          "lat": {
+            "type": "number"
+          },
+          "lng": {
+            "type": "number"
+          },
+          "distanceKm": {
+            "type": "number",
+            "description": "Present only when the request supplied coordinates"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "available",
+              "limited",
+              "busy",
+              "offline"
+            ]
+          },
+          "freePorts": {
+            "type": "integer"
+          },
+          "totalPorts": {
+            "type": "integer"
+          },
+          "connectors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "maxPowerKw": {
+            "type": "integer"
+          },
+          "pricePerKwh": {
+            "type": "number",
+            "description": "INR per kWh"
+          },
+          "hours": {
+            "type": "string"
+          },
+          "amenities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "rating": {
+            "type": "number"
+          },
+          "reviews": {
+            "type": "integer",
+            "description": "Total review count"
+          },
+          "googleMapsLink": {
+            "type": "string"
+          },
+          "isFavorite": {
+            "type": "boolean",
+            "description": "Always false for anonymous callers"
+          }
+        }
+      },
+      "Port": {
+        "type": "object",
+        "properties": {
+          "portNumber": {
+            "type": "integer"
+          },
+          "connectorType": {
+            "type": "string"
+          },
+          "maxPowerKw": {
+            "type": "integer"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "available",
+              "occupied"
+            ]
+          },
+          "pricePerKwh": {
+            "type": "number"
+          }
+        }
+      },
+      "StationDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Station"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "ports": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Port"
+                }
+              },
+              "liveTelemetry": {
+                "type": "boolean",
+                "description": "false: port states are estimated from freePorts/totalPorts, not read from the charger"
+              },
+              "recentReviews": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Review"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "Review": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "stationId": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "userName": {
+            "type": "string"
+          },
+          "rating": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "comment": {
+            "type": "string"
+          },
+          "plugCondition": {
+            "type": "string",
+            "enum": [
+              "working_perfect",
+              "slow_charge",
+              "broken_connector"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Booking": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "stationId": {
+            "type": "string"
+          },
+          "portNumber": {
+            "type": "integer"
+          },
+          "scheduledStart": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "scheduledEnd": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "completed",
+              "cancelled"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "station": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "address": {
+                "type": "string"
+              },
+              "lat": {
+                "type": "number"
+              },
+              "lng": {
+                "type": "number"
+              }
+            }
+          }
+        }
+      },
+      "LatLng": {
+        "type": "object",
+        "required": [
+          "lat",
+          "lng"
+        ],
+        "properties": {
+          "lat": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90,
+            "example": 12.9716
+          },
+          "lng": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180,
+            "example": 77.5946
+          }
+        }
+      },
+      "RoutePlanRequest": {
+        "type": "object",
+        "required": [
+          "origin",
+          "destination"
+        ],
+        "properties": {
+          "origin": {
+            "$ref": "#/components/schemas/LatLng"
+          },
+          "destination": {
+            "$ref": "#/components/schemas/LatLng"
+          },
+          "vehicle": {
+            "type": "object",
+            "properties": {
+              "batteryKwh": {
+                "type": "number",
+                "default": 40.5,
+                "minimum": 1,
+                "maximum": 300
+              },
+              "currentSocPercent": {
+                "type": "number",
+                "default": 70,
+                "minimum": 0,
+                "maximum": 100
+              },
+              "efficiencyKmPerKwh": {
+                "type": "number",
+                "default": 6.5,
+                "minimum": 0.5,
+                "maximum": 60
+              },
+              "maxChargeKw": {
+                "type": "number",
+                "default": 50,
+                "description": "Highest DC rate the vehicle accepts"
+              },
+              "connector": {
+                "type": "string",
+                "description": "Only suggest stations with this connector"
+              }
+            }
+          }
+        }
+      },
+      "RoutePlanResult": {
+        "type": "object",
+        "properties": {
+          "feasible": {
+            "type": "boolean",
+            "description": "false when no charging plan completes the trip (battery too low, or no fast chargers on the corridor)"
+          },
+          "totalDistanceKm": {
+            "type": "number",
+            "description": "Straight-line"
+          },
+          "estimatedRoadDistanceKm": {
+            "type": "number"
+          },
+          "estimatedDriveTimeMinutes": {
+            "type": "integer"
+          },
+          "estimatedChargingMinutes": {
+            "type": "integer"
+          },
+          "stopsNeeded": {
+            "type": "boolean"
+          },
+          "recommendedStops": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "stopNumber": {
+                  "type": "integer"
+                },
+                "station": {
+                  "$ref": "#/components/schemas/Station"
+                },
+                "distanceFromStartKm": {
+                  "type": "number"
+                },
+                "offRouteKm": {
+                  "type": "number"
+                },
+                "estimatedArrivalSoc": {
+                  "type": "integer"
+                },
+                "targetChargeSoc": {
+                  "type": "integer"
+                },
+                "chargeTimeMinutes": {
+                  "type": "integer"
+                },
+                "estimatedCostInr": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "arrivalDestinationSocPercent": {
+            "type": "integer"
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "assumptions": {
+            "type": "object",
+            "description": "Constants behind the estimate; this is not turn-by-turn routing"
+          }
         }
       }
     }
   },
   "paths": {
-    "/auth/otp/send": {
-      "post": {
-        "summary": "Request SMS OTP for Mobile Login",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "phone": { "type": "string", "example": "+919876543210" }
-                },
-                "required": ["phone"]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": { "description": "OTP sent successfully" }
-        }
-      }
-    },
-    "/auth/otp/verify": {
-      "post": {
-        "summary": "Verify OTP & Generate JWT Tokens",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "phone": { "type": "string", "example": "+919876543210" },
-                  "otp": { "type": "string", "example": "123456" },
-                  "fullName": { "type": "string", "example": "Jai Aakash" }
-                },
-                "required": ["phone", "otp"]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": { "description": "Authentication successful, returns tokens and user profile" }
-        }
-      }
-    },
-    "/stations/nearby": {
+    "/health": {
       "get": {
-        "summary": "Find EV Charging Stations Near Coordinates",
-        "parameters": [
-          { "name": "lat", "in": "query", "schema": { "type": "number" }, "example": 12.9716 },
-          { "name": "lng", "in": "query", "schema": { "type": "number" }, "example": 77.5946 },
-          { "name": "radius_km", "in": "query", "schema": { "type": "number" }, "example": 25 },
-          { "name": "connector", "in": "query", "schema": { "type": "string" }, "example": "CCS2" },
-          { "name": "min_power_kw", "in": "query", "schema": { "type": "integer" }, "example": 50 },
-          { "name": "network", "in": "query", "schema": { "type": "string" }, "example": "Tata Power EZ Charge" }
+        "tags": [
+          "System"
         ],
+        "summary": "Liveness check",
         "responses": {
           "200": {
-            "description": "List of nearby stations sorted by distance",
+            "description": "Service is up"
+          }
+        }
+      }
+    },
+    "/openapi.json": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "This specification",
+        "responses": {
+          "200": {
+            "description": "OpenAPI document"
+          }
+        }
+      }
+    },
+    "/auth/otp/send": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Send a 6-digit login code by SMS",
+        "description": "Code is valid 5 minutes, 30 s between resends, max 5 per phone per hour. In dev with ALLOW_DEMO_OTP=true the response includes `demoOtp`; never in production.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "phone"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "phone": {
+                    "type": "string",
+                    "description": "E.164",
+                    "example": "+919876543210"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "success": { "type": "boolean" },
-                    "count": { "type": "integer" },
-                    "data": { "type": "array", "items": { "$ref": "#/components/schemas/Station" } }
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "phone": {
+                          "type": "string"
+                        },
+                        "expiresInSeconds": {
+                          "type": "integer"
+                        },
+                        "resendAfterSeconds": {
+                          "type": "integer"
+                        },
+                        "demoOtp": {
+                          "type": "string",
+                          "description": "Dev only"
+                        }
+                      }
+                    }
                   }
                 }
               }
             }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "502": {
+            "description": "SMS provider failed (SMS_FAILED)"
+          },
+          "503": {
+            "description": "SMS provider not configured (SMS_NOT_CONFIGURED)"
+          }
+        }
+      }
+    },
+    "/auth/otp/verify": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Verify the code and sign in (creates the account on first login)",
+        "description": "5 wrong attempts invalidate the code (OTP_ATTEMPTS_EXCEEDED). `fullName` is used only when the account is created.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "phone",
+                  "otp"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "phone": {
+                    "type": "string"
+                  },
+                  "otp": {
+                    "type": "string",
+                    "pattern": "^\\d{6}$"
+                  },
+                  "fullName": {
+                    "type": "string",
+                    "maxLength": 80
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "user": {
+                          "$ref": "#/components/schemas/User"
+                        },
+                        "tokens": {
+                          "$ref": "#/components/schemas/Tokens"
+                        },
+                        "isNewUser": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Exchange a refresh token for a new token pair",
+        "description": "Refresh tokens are single use. Replaying a used token after a 10 s retry grace window revokes the whole login (REFRESH_TOKEN_REUSED). Always store the returned refresh token.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "refreshToken"
+                ],
+                "properties": {
+                  "refreshToken": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "tokens": {
+                          "$ref": "#/components/schemas/Tokens"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "description": "INVALID_REFRESH_TOKEN or REFRESH_TOKEN_REUSED. The user must sign in again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "End this login (revokes the refresh token family)",
+        "description": "Idempotent. Also invalidates access tokens issued in this login immediately.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "refreshToken"
+                ],
+                "properties": {
+                  "refreshToken": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "loggedOut": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          }
+        }
+      }
+    },
+    "/user/profile": {
+      "get": {
+        "tags": [
+          "User"
+        ],
+        "summary": "Current user",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/User"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "User"
+        ],
+        "summary": "Update profile (partial)",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "minProperties": 1,
+                "properties": {
+                  "fullName": {
+                    "type": "string",
+                    "maxLength": 80
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "nullable": true
+                  },
+                  "avatarUrl": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "https only",
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/User"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/user/account": {
+      "delete": {
+        "tags": [
+          "User"
+        ],
+        "summary": "Permanently delete the account and its data",
+        "description": "Removes profile, vehicles, favorites, bookings and reviews, and revokes all sessions. Required in-app by the App Store and Play Store.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/user/vehicles": {
+      "get": {
+        "tags": [
+          "User"
+        ],
+        "summary": "List saved vehicles",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Vehicle"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "User"
+        ],
+        "summary": "Add a vehicle (max 10)",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VehicleInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Vehicle"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/user/vehicles/{id}": {
+      "put": {
+        "tags": [
+          "User"
+        ],
+        "summary": "Replace a vehicle",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Vehicle id"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VehicleInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Vehicle"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "User"
+        ],
+        "summary": "Remove a vehicle",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Vehicle id"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Removed"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/user/favorites": {
+      "get": {
+        "tags": [
+          "User"
+        ],
+        "summary": "Favorite stations",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Station"
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "count": {
+                          "type": "integer"
+                        },
+                        "total": {
+                          "type": "integer"
+                        },
+                        "limit": {
+                          "type": "integer"
+                        },
+                        "offset": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/user/favorites/{stationId}": {
+      "post": {
+        "tags": [
+          "User"
+        ],
+        "summary": "Add a favorite (idempotent)",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "stationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Station id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "stationId": {
+                          "type": "string"
+                        },
+                        "favorites": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "User"
+        ],
+        "summary": "Remove a favorite (idempotent)",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "stationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Station id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "stationId": {
+                          "type": "string"
+                        },
+                        "favorites": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/stations/nearby": {
+      "get": {
+        "tags": [
+          "Stations"
+        ],
+        "summary": "Stations near a point, nearest first",
+        "description": "Bearer token is optional; when sent it must be valid (an expired one returns 401 TOKEN_EXPIRED so the app can refresh), and `isFavorite` is filled in.",
+        "security": [
+          {},
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "lat",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            }
+          },
+          {
+            "name": "lng",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            }
+          },
+          {
+            "name": "radius_km",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "default": 25,
+              "maximum": 500
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "maximum": 200
+            }
+          },
+          {
+            "name": "connector",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Substring match on connector type, e.g. CCS2"
+          },
+          {
+            "name": "min_power_kw",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number"
+            },
+            "description": "Minimum charger power in kW"
+          },
+          {
+            "name": "network",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Network name substring, or `all`"
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "available",
+                "limited",
+                "busy",
+                "offline",
+                "all"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Station"
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "count": {
+                          "type": "integer"
+                        },
+                        "limit": {
+                          "type": "integer"
+                        },
+                        "radiusKm": {
+                          "type": "number"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }
     },
     "/stations/bounds": {
       "get": {
-        "summary": "Find EV Charging Stations in Map Viewport",
+        "tags": [
+          "Stations"
+        ],
+        "summary": "Stations inside a map viewport",
+        "description": "Bearer token is optional; when sent it must be valid (an expired one returns 401 TOKEN_EXPIRED so the app can refresh), and `isFavorite` is filled in. `meta.truncated` is true when more stations exist than `limit`; ask the user to zoom in.",
+        "security": [
+          {},
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
-          { "name": "min_lat", "in": "query", "required": true, "schema": { "type": "number" } },
-          { "name": "min_lng", "in": "query", "required": true, "schema": { "type": "number" } },
-          { "name": "max_lat", "in": "query", "required": true, "schema": { "type": "number" } },
-          { "name": "max_lng", "in": "query", "required": true, "schema": { "type": "number" } }
+          {
+            "name": "min_lat",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "min_lng",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "max_lat",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "max_lng",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 200,
+              "maximum": 500
+            }
+          },
+          {
+            "name": "connector",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Substring match on connector type, e.g. CCS2"
+          },
+          {
+            "name": "min_power_kw",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number"
+            },
+            "description": "Minimum charger power in kW"
+          },
+          {
+            "name": "network",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Network name substring, or `all`"
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "available",
+                "limited",
+                "busy",
+                "offline",
+                "all"
+              ]
+            }
+          }
         ],
         "responses": {
-          "200": { "description": "Stations within bounding box" }
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Station"
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "count": {
+                          "type": "integer"
+                        },
+                        "total": {
+                          "type": "integer"
+                        },
+                        "limit": {
+                          "type": "integer"
+                        },
+                        "truncated": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/stations/search": {
+      "get": {
+        "tags": [
+          "Stations"
+        ],
+        "summary": "Text search with pagination",
+        "description": "Bearer token is optional; when sent it must be valid (an expired one returns 401 TOKEN_EXPIRED so the app can refresh), and `isFavorite` is filled in. Pass `lat`+`lng` to get `distanceKm` and nearest-first ordering.",
+        "security": [
+          {},
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "description": "Matches name, address, network, city, pincode"
+          },
+          {
+            "name": "city",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "lat",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "lng",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 25,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Station"
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "count": {
+                          "type": "integer"
+                        },
+                        "total": {
+                          "type": "integer"
+                        },
+                        "limit": {
+                          "type": "integer"
+                        },
+                        "offset": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
         }
       }
     },
     "/stations/{id}": {
       "get": {
-        "summary": "Get Single Station with Live Ports Telemetry",
+        "tags": [
+          "Stations"
+        ],
+        "summary": "Station detail with ports and recent reviews",
+        "description": "Bearer token is optional; when sent it must be valid (an expired one returns 401 TOKEN_EXPIRED so the app can refresh), and `isFavorite` is filled in.",
+        "security": [
+          {},
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
-          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Station id (URL-encode it; some ids contain special characters)"
+          }
         ],
         "responses": {
-          "200": { "description": "Full station details with real-time port states" }
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/StationDetail"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
         }
       }
     },
-    "/routes/plan": {
+    "/stations/{id}/reviews": {
+      "get": {
+        "tags": [
+          "Reviews"
+        ],
+        "summary": "Community reviews",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Station id"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Review"
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "count": {
+                          "type": "integer"
+                        },
+                        "total": {
+                          "type": "integer"
+                        },
+                        "limit": {
+                          "type": "integer"
+                        },
+                        "offset": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
       "post": {
-        "summary": "Smart EV Corridor & Trip Route Planner",
+        "tags": [
+          "Reviews"
+        ],
+        "summary": "Review a station (one per user per station)",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Station id"
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "type": "object",
+                "required": [
+                  "rating"
+                ],
+                "additionalProperties": false,
                 "properties": {
-                  "origin": { "type": "object", "properties": { "lat": { "type": "number" }, "lng": { "type": "number" } } },
-                  "destination": { "type": "object", "properties": { "lat": { "type": "number" }, "lng": { "type": "number" } } },
-                  "vehicle": {
-                    "type": "object",
-                    "properties": {
-                      "batteryKwh": { "type": "number", "example": 40.5 },
-                      "currentSocPercent": { "type": "integer", "example": 65 },
-                      "efficiencyKmPerKwh": { "type": "number", "example": 6.5 }
-                    }
+                  "rating": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 5
+                  },
+                  "comment": {
+                    "type": "string",
+                    "maxLength": 500
+                  },
+                  "plugCondition": {
+                    "type": "string",
+                    "enum": [
+                      "working_perfect",
+                      "slow_charge",
+                      "broken_connector"
+                    ],
+                    "default": "working_perfect"
                   }
                 }
               }
@@ -211,43 +2033,309 @@
           }
         },
         "responses": {
-          "200": { "description": "Planned route with suggested EV charging stops" }
-        }
-      }
-    },
-    "/user/favorites": {
-      "get": {
-        "summary": "Get User Favorite Stations",
-        "security": [{ "BearerAuth": [] }],
-        "responses": {
-          "200": { "description": "User favorite stations" }
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Review"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
         }
       }
     },
     "/stations/{id}/reserve": {
       "post": {
-        "summary": "Reserve a Charging Port Slot",
-        "security": [{ "BearerAuth": [] }],
+        "tags": [
+          "Bookings"
+        ],
+        "summary": "Reserve a port",
+        "description": "Rejects overlapping reservations on the same port (SLOT_TAKEN), offline stations, and more than 3 active reservations per user. This is a record in this API only; the charger operator does not enforce it.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
-          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Station id"
+          }
         ],
         "requestBody": {
-          "required": true,
+          "required": false,
           "content": {
             "application/json": {
               "schema": {
                 "type": "object",
+                "additionalProperties": false,
                 "properties": {
-                  "portNumber": { "type": "integer", "example": 1 },
-                  "startTimeMinutesFromNow": { "type": "integer", "example": 15 },
-                  "durationMinutes": { "type": "integer", "example": 45 }
+                  "portNumber": {
+                    "type": "integer",
+                    "default": 1,
+                    "minimum": 1
+                  },
+                  "startTimeMinutesFromNow": {
+                    "type": "integer",
+                    "default": 15,
+                    "minimum": 0,
+                    "maximum": 1440
+                  },
+                  "durationMinutes": {
+                    "type": "integer",
+                    "default": 45,
+                    "minimum": 15,
+                    "maximum": 180
+                  }
                 }
               }
             }
           }
         },
         "responses": {
-          "201": { "description": "Slot reserved successfully" }
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Booking"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/bookings/my": {
+      "get": {
+        "tags": [
+          "Bookings"
+        ],
+        "summary": "My reservations, newest first",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "active",
+                "completed",
+                "cancelled"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Booking"
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "count": {
+                          "type": "integer"
+                        },
+                        "total": {
+                          "type": "integer"
+                        },
+                        "limit": {
+                          "type": "integer"
+                        },
+                        "offset": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/bookings/{id}": {
+      "delete": {
+        "tags": [
+          "Bookings"
+        ],
+        "summary": "Cancel a reservation",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Booking id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Booking"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/routes/plan": {
+      "post": {
+        "tags": [
+          "Routes"
+        ],
+        "summary": "Plan charging stops for a trip",
+        "description": "Finds fast chargers (>= 25 kW, not offline) within 20 km of the straight line between origin and destination, keeping a 10% reserve. Returns `feasible: false` with warnings instead of inventing stops when coverage is missing.",
+        "security": [
+          {},
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoutePlanRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/RoutePlanResult"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
         }
       }
     }

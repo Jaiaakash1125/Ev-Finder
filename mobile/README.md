@@ -15,7 +15,27 @@ The API server will listen on `http://localhost:5000/api/v1` with 980+ live EV s
 
 ---
 
-### 2. Run the Mobile App
+### 2. Point the app at the API
+
+The app talks to the API through `src/api/evApi.ts` (typed client with secure token storage and automatic token refresh).
+
+- **Development:** nothing to configure. It targets port 5000 on the computer running Expo, so keep phone and computer on the same Wi-Fi. OTP codes print in the API terminal.
+- **Release builds:** set `EXPO_PUBLIC_API_URL=https://your-host/api/v1` (HTTPS is enforced).
+- Run `npx expo install expo-secure-store` once after pulling this change (tokens are kept in the device keychain/keystore).
+
+```ts
+import { evApi } from "./src/api/evApi";
+
+await evApi.session.restore();                          // at app start
+await evApi.auth.sendOtp("+919876543210");
+await evApi.auth.verifyOtp("+919876543210", "482913");  // stores tokens securely
+const { stations } = await evApi.stations.nearby({ lat, lng, radius_km: 10 });
+evApi.session.onSessionExpired(() => showLoginScreen());
+```
+
+Full endpoint reference: [`../backend/API.md`](../backend/API.md).
+
+### 3. Run the Mobile App
 
 Navigate to the `mobile/` directory:
 ```bash
@@ -24,7 +44,7 @@ npm install
 npx expo start
 ```
 
-### 3. Test on Physical Devices & Emulators
+### 4. Test on Physical Devices & Emulators
 - **Real Phone (iOS / Android):** Install the **Expo Go** app from the App Store or Google Play Store. Scan the QR code printed in your terminal.
 - **Android Emulator:** Press `a` in terminal.
 - **iOS Simulator:** Press `i` in terminal.
