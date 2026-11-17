@@ -1,9 +1,26 @@
 import { stations as fallbackStations, Station, cityCoordinates } from "../data/stations";
 
-// Default API endpoint points to standard XAMPP Apache htdocs path
+const runtimeEnv = (
+  globalThis as typeof globalThis & {
+    process?: { env?: Record<string, string | undefined> };
+  }
+).process?.env;
+const configuredApiUrl = import.meta.env["VITE_API_URL"];
+const browserApiUrl =
+  typeof window !== "undefined"
+    ? window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+      ? "http://localhost:5000/api/v1"
+      : `${window.location.origin}/api/v1`
+    : undefined;
+const deployedServerApiUrl = runtimeEnv?.["VERCEL_URL"]
+  ? `https://${runtimeEnv["VERCEL_URL"]}/api/v1`
+  : undefined;
 const API_BASE_URL =
-  (typeof import.meta !== "undefined" && (import.meta.env as any)?.["VITE_API_URL"]) ||
-  "http://localhost/api";
+  configuredApiUrl || browserApiUrl || deployedServerApiUrl || "http://localhost:5000/api/v1";
+
+const LEGACY_API_BASE_URL = "http://localhost/api";
+const canUseLegacyApi =
+  typeof window !== "undefined" && ["localhost", "127.0.0.1"].includes(window.location.hostname);
 
 export interface FetchStationsResult {
   data: Station[];
@@ -16,7 +33,10 @@ export interface FetchStationsResult {
 const CITY_NAME_MAP: [RegExp, string][] = [
   [/bengaluru|bangalore/i, "Bengaluru"],
   [/mumbai|bombay|navi mumbai|thane|borivali|andheri|nariman/i, "Mumbai"],
-  [/new delhi|delhi|noida|greater noida|gurugram|gurgaon|faridabad|ghaziabad|dwarka|saket|connaught/i, "New Delhi"],
+  [
+    /new delhi|delhi|noida|greater noida|gurugram|gurgaon|faridabad|ghaziabad|dwarka|saket|connaught/i,
+    "New Delhi",
+  ],
   [/hyderabad|secunderabad|gachibowli|hitec city/i, "Hyderabad"],
   [/chennai|madras|guindy|omr|velachery/i, "Chennai"],
   [/pune|pimpri|chinchwad|hinjewadi|wakad|baner/i, "Pune"],
@@ -75,18 +95,9 @@ export function cleanCityName(
   rawAddress: string,
   rawName: string,
   lat?: number,
-  lng?: number
+  lng?: number,
 ): string {
-  const combined = `${rawCity || ""} ${rawAddress || ""} ${rawName || ""}`;
-
-  // 1. Check known city name patterns in combined text
-  for (const [regex, cleanName] of CITY_NAME_MAP) {
-    if (regex.test(combined)) {
-      return cleanName;
-    }
-  }
-
-  // 2. Proximity to known major city centers (within 45 km radius)
+  // 1. Proximity to known major city centers (within 45 km radius) is ground truth
   if (lat && lng && !isNaN(lat) && !isNaN(lng) && lat !== 0) {
     let closestCity = "";
     let minDistance = 45; // 45km max radius for metro/city cluster
@@ -100,40 +111,53 @@ export function cleanCityName(
     }
 
     if (closestCity) {
+      if (closestCity === "New Delhi" || closestCity === "Gurugram" || closestCity === "Noida") {
+        const text = `${rawAddress || ""} ${rawCity || ""}`;
+        if (/gurugram|gurgaon/i.test(text)) return "Gurugram";
+        if (/noida|greater noida/i.test(text)) return "Noida";
+        return "New Delhi";
+      }
       return closestCity;
     }
   }
 
-  // 3. Fallback: Clean up raw city if it's a simple reasonable word
+  // 2. Check rawCity if valid and not a street/highway/sentence
   if (rawCity) {
     let c = rawCity.trim();
     c = c.replace(/^[0-9\-\+\s]+/, "").trim();
     if (c.includes(",")) c = c.split(",")[0]?.trim() || "";
     if (c.includes(":")) c = c.split(":")[0]?.trim() || "";
-    if (
-      c.length > 20 ||
-      /dealer|service|station|industrial|highway|toll|sector|opposite|petroleum/i.test(c)
-    ) {
-      if (rawAddress) {
-        const parts = rawAddress
-          .split(",")
-          .map((p) => p.trim())
-          .filter(Boolean);
-        for (let i = parts.length - 1; i >= 0; i--) {
-          const part = parts[i] || "";
-          if (
-            part.length > 2 &&
-            part.length < 20 &&
-            !/^\d+$/.test(part) &&
-            !/india/i.test(part)
-          ) {
-            return part;
-          }
-        }
+
+    // Match known city patterns on rawCity only (never on street addresses)
+    for (const [regex, cleanName] of CITY_NAME_MAP) {
+      if (regex.test(c)) {
+        return cleanName;
       }
     }
-    if (c.length > 2 && c.length <= 25) {
-      return c;
+
+    if (
+      c.length > 2 &&
+      c.length <= 25 &&
+      !/dealer|service|station|industrial|highway|toll|sector|opposite|petroleum/i.test(c)
+    ) {
+      return c.charAt(0).toUpperCase() + c.slice(1);
+    }
+  }
+
+  // 3. Fallback: Parse address segments from right to left
+  if (rawAddress) {
+    const cleanAddr = rawAddress.replace(/\b[1-9][0-9]{5}\b/g, "").replace(/,\s*India\s*$/i, "").trim();
+    const parts = cleanAddr
+      .split(",")
+      .map((p) => p.trim())
+      .filter(Boolean);
+    for (let i = parts.length - 1; i >= 0; i--) {
+      const part = parts[i] || "";
+      if (/\d|hwy|highway|expressway|road|rd|nagar|colony|sector|floor|near|opp|plot|mall|complex/i.test(part)) continue;
+      if (/karnataka|maharashtra|tamil nadu|telangana|andhra|gujarat|rajasthan|madhya pradesh|uttar pradesh|kerala|punjab|haryana|bihar|odisha|west bengal|assam|jharkhand|chhattisgarh|uttarakhand|himachal/i.test(part)) continue;
+      if (part.length > 2 && part.length <= 25) {
+        return part.charAt(0).toUpperCase() + part.slice(1);
+      }
     }
   }
 
@@ -202,15 +226,109 @@ export function normalizeStation(raw: any): Station {
 }
 
 /**
- * Fetches all EV stations from the XAMPP PHP API backend,
- * with automatic fallback to local dataset (8,025 stations) if XAMPP is unreachable.
+ * Fetches all EV stations from the Node.js API backend,
+ * with automatic fallback to the legacy PHP endpoint and then the local dataset.
  */
 export async function fetchStations(): Promise<FetchStationsResult> {
+  try {
+    const fetchPage = async (page: number) => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      try {
+        const response = await fetch(`${API_BASE_URL}/stations?page=${page}&limit=200`, {
+          signal: controller.signal,
+          headers: { Accept: "application/json" },
+        });
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const payload = await response.json();
+        if (!payload?.success || !Array.isArray(payload.data)) {
+          throw new Error("API did not return a valid station list");
+        }
+        return {
+          data: payload.data as Station[],
+          totalPages: Number(payload.pagination?.totalPages) || 1,
+        };
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    };
+
+    const firstPage = await fetchPage(1);
+    const allStations = [...firstPage.data];
+    for (let page = 2; page <= firstPage.totalPages; page += 4) {
+      const pages = Array.from(
+        { length: Math.min(4, firstPage.totalPages - page + 1) },
+        (_, index) => page + index,
+      );
+      const results = await Promise.all(pages.map(fetchPage));
+      results.forEach((result) => allStations.push(...result.data));
+    }
+
+    return {
+      data: allStations,
+      isLiveDb: true,
+      source: "xampp_mysql",
+    };
+  } catch (err: any) {
+    if (!canUseLegacyApi) {
+      return {
+        data: fallbackStations,
+        isLiveDb: false,
+        source: "local_fallback",
+        error: err?.message,
+      };
+    }
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+      const response = await fetch(`${LEGACY_API_BASE_URL}/get_stations.php`, {
+        signal: controller.signal,
+        headers: {
+          Accept: "application/json",
+        },
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const rawData = await response.json();
+
+      if (!Array.isArray(rawData)) {
+        throw new Error("Legacy PHP API did not return an array of stations");
+      }
+
+      const normalized = rawData.map(normalizeStation);
+
+      return {
+        data: normalized,
+        isLiveDb: true,
+        source: "xampp_mysql",
+      };
+    } catch (legacyErr: any) {
+      return {
+        data: fallbackStations,
+        isLiveDb: false,
+        source: "local_fallback",
+        error: legacyErr?.message || err?.message,
+      };
+    }
+  }
+}
+
+/**
+ * Fetches a single station by its ID
+ */
+export async function fetchStationById(id: string): Promise<Station | null> {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 4000);
 
-    const response = await fetch(`${API_BASE_URL}/get_stations.php`, {
+    const response = await fetch(`${API_BASE_URL}/stations/${id}`, {
       signal: controller.signal,
       headers: {
         Accept: "application/json",
@@ -224,32 +342,13 @@ export async function fetchStations(): Promise<FetchStationsResult> {
     }
 
     const rawData = await response.json();
-
-    if (!Array.isArray(rawData)) {
-      throw new Error("API did not return an array of stations");
+    if (!rawData || !rawData.success || !rawData.data) {
+      throw new Error("API did not return a valid station");
     }
 
-    const normalized = rawData.map(normalizeStation);
-
-    return {
-      data: normalized,
-      isLiveDb: true,
-      source: "xampp_mysql",
-    };
-  } catch (err: any) {
-    return {
-      data: fallbackStations,
-      isLiveDb: false,
-      source: "local_fallback",
-      error: err?.message,
-    };
+    return rawData.data as Station;
+  } catch {
+    const result = await fetchStations();
+    return result.data.find((s) => s.id === id) || null;
   }
-}
-
-/**
- * Fetches a single station by its ID
- */
-export async function fetchStationById(id: string): Promise<Station | null> {
-  const result = await fetchStations();
-  return result.data.find((s) => s.id === id) || null;
 }

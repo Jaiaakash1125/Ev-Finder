@@ -1,8 +1,106 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { cityCoordinates } from "../data/stations";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
+}
+
+const CANONICAL_CITY_ALIASES: Record<string, string> = {
+  delhi: "New Delhi",
+  "new delhi": "New Delhi",
+  bengaluru: "Bengaluru",
+  bangalore: "Bengaluru",
+  mumbai: "Mumbai",
+  bombay: "Mumbai",
+  chennai: "Chennai",
+  madras: "Chennai",
+  kolkata: "Kolkata",
+  calcutta: "Kolkata",
+  kochi: "Kochi",
+  cochin: "Kochi",
+  ernakulam: "Kochi",
+  mysore: "Mysore",
+  mysuru: "Mysore",
+  mangalore: "Mangalore",
+  mangaluru: "Mangalore",
+  vadodara: "Vadodara",
+  baroda: "Vadodara",
+  varanasi: "Varanasi",
+  banaras: "Varanasi",
+  kashi: "Varanasi",
+  visakhapatnam: "Visakhapatnam",
+  vizag: "Visakhapatnam",
+  gurugram: "Gurugram",
+  gurgaon: "Gurugram",
+  noida: "Noida",
+  "greater noida": "Noida",
+};
+
+/**
+ * Validates whether a station belongs to the target city filter.
+ * Prevents false matches (e.g. Chennai stations showing in Mumbai, or Delhi stations showing in Gurugram).
+ */
+export function matchesCity(
+  station: { city?: string | null; state?: string | null; lat?: number | null; lng?: number | null },
+  targetCity: string | undefined | null
+): boolean {
+  if (!targetCity || targetCity === "All India" || targetCity.toLowerCase() === "all") {
+    return true;
+  }
+
+  const cleanTarget = targetCity.trim().toLowerCase();
+  const stationCity = (station.city || "").trim().toLowerCase();
+
+  // 1. Direct state match (e.g. filtering by a state like "Goa" or "Kerala")
+  if (station.state && station.state.toLowerCase() === cleanTarget) {
+    return true;
+  }
+
+  const canonicalTarget = (CANONICAL_CITY_ALIASES[cleanTarget] || targetCity.trim()).toLowerCase();
+  const canonicalStation = (CANONICAL_CITY_ALIASES[stationCity] || (station.city || "").trim()).toLowerCase();
+
+  // 2. Check if city or canonical alias matches
+  const nameMatches =
+    stationCity === cleanTarget ||
+    canonicalStation === canonicalTarget ||
+    stationCity.includes(cleanTarget) ||
+    cleanTarget.includes(stationCity);
+
+  // 3. Physical GPS coordinate check against target city
+  if (
+    station.lat !== undefined &&
+    station.lat !== null &&
+    station.lng !== undefined &&
+    station.lng !== null &&
+    !isNaN(station.lat) &&
+    !isNaN(station.lng)
+  ) {
+    const targetCoord =
+      cityCoordinates[CANONICAL_CITY_ALIASES[cleanTarget] || targetCity.trim()];
+    if (targetCoord) {
+      const dist = calculateDistanceKm(station.lat, station.lng, targetCoord.lat, targetCoord.lng);
+      // Hard cutoff: Station must be within 75km of the target city center
+      if (dist > 75) {
+        return false;
+      }
+      if (nameMatches) {
+        return true;
+      }
+
+      // If station explicitly belongs to another major city in the region, do not cross-match
+      // (e.g., Gurugram stations shouldn't bleed into New Delhi or vice-versa)
+      const majorCitySet = new Set(Object.keys(cityCoordinates).map((c) => c.toLowerCase()));
+      if (majorCitySet.has(canonicalStation) && canonicalStation !== canonicalTarget) {
+        return false;
+      }
+
+      // For unmapped suburbs/localities within 35km of city center
+      return dist <= 35;
+    }
+  }
+
+  return nameMatches;
 }
 
 /**
@@ -62,10 +160,13 @@ export function matchesConnector(
 
     // LECCS / Light EV / Ather / 2-wheeler
     if (
-      (cleanTarget.includes("leccs") || cleanTarget.includes("ather") || cleanTarget.includes("lightev")) &&
-      (conn.includes("leccs") || conn.includes("bharatac") || conn.includes("type2") || (stationNetwork && stationNetwork.toLowerCase().includes("ather")))
+      cleanTarget.includes("leccs") || cleanTarget.includes("ather") || cleanTarget.includes("lightev")
     ) {
-      return true;
+      return (
+        conn.includes("leccs") ||
+        conn.includes("ather") ||
+        Boolean(stationNetwork && stationNetwork.toLowerCase().includes("ather"))
+      );
     }
 
     // CHAdeMO

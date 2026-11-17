@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from "react";
-import { StyleSheet, View, ActivityIndicator } from "react-native";
+import { StyleSheet, View, ActivityIndicator, Platform } from "react-native";
 import { WebView } from "react-native-webview";
 import { Station } from "../types";
 import { darkColors, lightColors } from "../theme/theme";
@@ -8,6 +8,7 @@ interface LeafletMapViewProps {
   stations: Station[];
   selectedCity: string;
   onSelectStation: (station: Station) => void;
+  onBoundsChange?: (bounds: { min_lat: number; min_lng: number; max_lat: number; max_lng: number }) => void;
   isDark?: boolean;
 }
 
@@ -26,16 +27,45 @@ export const LeafletMapView: React.FC<LeafletMapViewProps> = ({
   stations,
   selectedCity,
   onSelectStation,
+  onBoundsChange,
   isDark = true,
 }) => {
   const webViewRef = useRef<WebView | null>(null);
+  const iframeRef = useRef<any>(null);
   const colors = isDark ? darkColors : lightColors;
+
+  // Web event listener for postMessage communication from iframe
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const handleWindowMessage = (event: MessageEvent) => {
+      try {
+        const data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+        if (data?.type === "SELECT_STATION" && data.station) {
+          onSelectStation(data.station);
+        } else if (data?.type === "BOUNDS_CHANGE" && data.bounds && onBoundsChange) {
+          onBoundsChange(data.bounds);
+        }
+      } catch {
+        // ignore invalid json messages
+      }
+    };
+    window.addEventListener("message", handleWindowMessage);
+    return () => window.removeEventListener("message", handleWindowMessage);
+  }, [onSelectStation, onBoundsChange]);
 
   // Update map markers, theme filter, and view when stations, city, or theme changes
   useEffect(() => {
-    if (!webViewRef.current) return;
     const cityData = CITY_COORDS[selectedCity] || CITY_COORDS["All India"];
-    
+
+    if (Platform.OS === "web") {
+      const iframe = iframeRef.current;
+      if (iframe?.contentWindow && (iframe.contentWindow as any).updateMapData) {
+        (iframe.contentWindow as any).updateMapData(stations, cityData.lat, cityData.lng, cityData.zoom, isDark);
+      }
+      return;
+    }
+
+    if (!webViewRef.current) return;
     const script = `
       if (window.updateMapData) {
         window.updateMapData(${JSON.stringify(stations)}, ${cityData.lat}, ${cityData.lng}, ${cityData.zoom}, ${isDark});
@@ -148,6 +178,27 @@ export const LeafletMapView: React.FC<LeafletMapViewProps> = ({
     });
     map.addLayer(clusterGroup);
 
+    map.on('moveend', function() {
+      try {
+        var b = map.getBounds();
+        var msg = JSON.stringify({
+          type: 'BOUNDS_CHANGE',
+          bounds: {
+            min_lat: b.getSouth(),
+            min_lng: b.getWest(),
+            max_lat: b.getNorth(),
+            max_lng: b.getEast()
+          }
+        });
+        if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+          window.ReactNativeWebView.postMessage(msg);
+        }
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage(msg, '*');
+        }
+      } catch (e) {}
+    });
+
     var currentStationsMap = {};
 
     window.updateMapData = function(stations, lat, lng, zoom, isDarkMode) {
@@ -179,11 +230,17 @@ export const LeafletMapView: React.FC<LeafletMapViewProps> = ({
 
         marker.on('click', function(e) {
           var clickedStation = currentStationsMap[e.target.stationId];
-          if (clickedStation && window.ReactNativeWebView) {
-            window.ReactNativeWebView.postMessage(JSON.stringify({
+          if (clickedStation) {
+            var msg = JSON.stringify({
               type: 'SELECT_STATION',
               station: clickedStation
-            }));
+            });
+            if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+              window.ReactNativeWebView.postMessage(msg);
+            }
+            if (window.parent && window.parent !== window) {
+              window.parent.postMessage(msg, '*');
+            }
           }
         });
 
@@ -199,9 +256,31 @@ export const LeafletMapView: React.FC<LeafletMapViewProps> = ({
 </html>
   `;
 
+  if (Platform.OS === "web") {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <iframe
+          ref={iframeRef}
+          srcDoc={htmlContent}
+          style={{ width: "100%", height: "100%", border: "none" }}
+          title="Leaflet Map"
+          onLoad={() => {
+            const cityData = CITY_COORDS[selectedCity] || CITY_COORDS["All India"];
+            const iframe = iframeRef.current;
+            if (iframe?.contentWindow && (iframe.contentWindow as any).updateMapData) {
+              (iframe.contentWindow as any).updateMapData(stations, cityData.lat, cityData.lng, cityData.zoom, isDark);
+            }
+          }}
+        />
+      </View>
+    );
+  }
+
+  const NativeWebView = WebView as any;
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <WebView
+      <NativeWebView
         ref={webViewRef}
         originWhitelist={["*"]}
         source={{ html: htmlContent }}
@@ -209,11 +288,13 @@ export const LeafletMapView: React.FC<LeafletMapViewProps> = ({
         javaScriptEnabled
         domStorageEnabled
         scrollEnabled={false}
-        onMessage={(event) => {
+        onMessage={(event: any) => {
           try {
             const data = JSON.parse(event.nativeEvent.data);
             if (data.type === "SELECT_STATION" && data.station) {
               onSelectStation(data.station);
+            } else if (data.type === "BOUNDS_CHANGE" && data.bounds && onBoundsChange) {
+              onBoundsChange(data.bounds);
             }
           } catch (err) {
             console.warn("WebView message parse error:", err);

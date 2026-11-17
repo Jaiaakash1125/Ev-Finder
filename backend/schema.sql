@@ -5,8 +5,10 @@
 CREATE DATABASE IF NOT EXISTS `india_ev_db` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE `india_ev_db`;
 
--- Drop old table if exists
+SET FOREIGN_KEY_CHECKS = 0;
+DROP TABLE IF EXISTS `ev_reviews`;
 DROP TABLE IF EXISTS `ev_stations`;
+SET FOREIGN_KEY_CHECKS = 1;
 
 -- Create `ev_stations` table matching website columns
 CREATE TABLE `ev_stations` (
@@ -32,6 +34,20 @@ CREATE TABLE `ev_stations` (
   `reviews` INT DEFAULT 100,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `ev_reviews` (
+  `id` VARCHAR(50) NOT NULL PRIMARY KEY,
+  `station_id` VARCHAR(100) NOT NULL,
+  `user_id` VARCHAR(50) DEFAULT NULL,
+  `user_name` VARCHAR(120) NOT NULL,
+  `rating` TINYINT UNSIGNED NOT NULL,
+  `comment` TEXT NOT NULL,
+  `plug_condition` ENUM('working_perfect', 'slow_charge', 'broken_connector') NOT NULL,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX `idx_ev_reviews_station_created` (`station_id`, `created_at`),
+  CONSTRAINT `fk_ev_reviews_station` FOREIGN KEY (`station_id`) REFERENCES `ev_stations` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `chk_ev_reviews_rating` CHECK (`rating` BETWEEN 1 AND 5)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Complete Dataset of 985 Indian EV Charging Stations

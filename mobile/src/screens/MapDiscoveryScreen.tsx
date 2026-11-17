@@ -8,11 +8,10 @@ import {
   ActivityIndicator,
 } from "react-native";
 import * as Linking from "expo-linking";
-import { Map, List } from "lucide-react-native";
+import { Map as MapIcon, List } from "lucide-react-native";
 
 import { Station } from "../types";
-import { fetchStations } from "../api/client";
-import { stations as fallbackStations } from "../data/stations";
+import { api } from "../api/stationsApi";
 import { darkColors, lightColors, radius, spacing } from "../theme/theme";
 import { HeaderBar } from "../components/HeaderBar";
 import { FilterChipsBar } from "../components/FilterChipsBar";
@@ -21,13 +20,24 @@ import { StationDetailBottomSheet } from "../components/StationDetailBottomSheet
 import { LeafletMapView } from "../components/LeafletMapView";
 import { FilterModal, FilterState } from "../components/FilterModal";
 
+const CITY_COORDS: Record<string, { lat: number; lng: number; radius: number }> = {
+  "All India": { lat: 12.9716, lng: 77.5946, radius: 50 },
+  Bengaluru: { lat: 12.9716, lng: 77.5946, radius: 35 },
+  "New Delhi": { lat: 28.6139, lng: 77.209, radius: 40 },
+  Mumbai: { lat: 19.076, lng: 72.8777, radius: 40 },
+  Hyderabad: { lat: 17.385, lng: 78.4867, radius: 35 },
+  Chennai: { lat: 13.0827, lng: 80.2707, radius: 35 },
+  Pune: { lat: 18.5204, lng: 73.8567, radius: 30 },
+  Kolkata: { lat: 22.5726, lng: 88.3639, radius: 35 },
+};
+
 export const MapDiscoveryScreen: React.FC = () => {
   // Theme State (Dark by default, switchable to Light)
   const [isDark, setIsDark] = useState<boolean>(true);
   const colors = isDark ? darkColors : lightColors;
 
   // Station Data State
-  const [allStations, setAllStations] = useState<Station[]>(fallbackStations);
+  const [allStations, setAllStations] = useState<Station[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<"map" | "list">("map");
 
@@ -47,17 +57,49 @@ export const MapDiscoveryScreen: React.FC = () => {
   const [sheetVisible, setSheetVisible] = useState<boolean>(false);
 
   useEffect(() => {
-    loadLiveXamppStations();
-  }, []);
+    loadNearbyStations();
+  }, [filters.city]);
 
-  const loadLiveXamppStations = async () => {
+  // Load stations around the user's location or selected city using api.nearby
+  const loadNearbyStations = async (lat?: number, lng?: number, radius?: number) => {
     try {
-      const res = await fetchStations();
-      if (res.data && res.data.length > 0) {
+      setLoading(true);
+      const targetCoords = CITY_COORDS[filters.city] || CITY_COORDS["Bengaluru"];
+      const useLat = lat ?? targetCoords.lat;
+      const useLng = lng ?? targetCoords.lng;
+      const useRadius = radius ?? targetCoords.radius;
+
+      const res = await api.nearby(useLat, useLng, useRadius);
+      if (res?.data && res.data.length > 0) {
         setAllStations(res.data);
+      } else {
+        // Fallback to general stations list if nearby returned no results
+        const generalRes = await api.stations({ limit: 100, city: filters.city !== "All India" ? filters.city : undefined });
+        if (generalRes?.data && generalRes.data.length > 0) {
+          setAllStations(generalRes.data);
+        }
       }
     } catch (err) {
-      console.warn("Using fallback dataset:", err);
+      console.warn("Error fetching nearby stations:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Load stations within the visible map area using api.bounds
+  const handleBoundsChange = async (b: { min_lat: number; min_lng: number; max_lat: number; max_lng: number }) => {
+    try {
+      const res = await api.bounds(b.min_lat, b.min_lng, b.max_lat, b.max_lng, 150);
+      if (res?.data && res.data.length > 0) {
+        setAllStations((prev) => {
+          const map = new Map<string, Station>();
+          prev.forEach((s) => map.set(s.id, s));
+          res.data.forEach((s) => map.set(s.id, s));
+          return Array.from(map.values());
+        });
+      }
+    } catch (err) {
+      console.warn("Error fetching bounds stations:", err);
     }
   };
 
@@ -178,6 +220,7 @@ export const MapDiscoveryScreen: React.FC = () => {
               setSelectedStation(station);
               setSheetVisible(true);
             }}
+            onBoundsChange={handleBoundsChange}
             isDark={isDark}
           />
         </View>
@@ -224,7 +267,7 @@ export const MapDiscoveryScreen: React.FC = () => {
             </>
           ) : (
             <>
-              <Map size={16} color="#020617" />
+              <MapIcon size={16} color="#020617" />
               <Text style={styles.viewToggleText}>Map View</Text>
             </>
           )}

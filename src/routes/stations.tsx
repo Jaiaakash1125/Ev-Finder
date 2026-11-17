@@ -1,12 +1,12 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { SiteChrome } from "../components/SiteChrome";
 import { StationCard } from "../components/StationCard";
 import { StationFilterPanel, StationFiltersState } from "../components/StationFilterPanel";
 import { StationDetailModal } from "../components/StationDetailModal";
 import { Station, cityCoordinates } from "../data/stations";
 import { useStations } from "../hooks/useStations";
-import { matchesConnector, calculateDistanceKm, getClosestCity } from "../lib/utils";
+import { matchesConnector, matchesCity, calculateDistanceKm, getClosestCity } from "../lib/utils";
 
 type StationSearch = {
   city?: string | undefined;
@@ -55,7 +55,14 @@ function StationsPage() {
   const [projectedStation, setProjectedStation] = useState<Station | null>(null);
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [page, setPage] = useState(1);
+  const hasManuallySelectedCity = useRef(Boolean(search.city));
   const PAGE_SIZE = 24;
+
+  useEffect(() => {
+    if (search.city) {
+      hasManuallySelectedCity.current = true;
+    }
+  }, [search.city]);
 
   // Automatically detect user location if no city is chosen
   useEffect(() => {
@@ -65,7 +72,7 @@ function StationsPage() {
           const { latitude, longitude } = pos.coords;
           setUserCoords({ lat: latitude, lng: longitude });
           const closest = getClosestCity(latitude, longitude, cityCoordinates);
-          if (closest && !search.city) {
+          if (closest && !hasManuallySelectedCity.current) {
             setFilter({ city: closest });
           }
         },
@@ -76,13 +83,16 @@ function StationsPage() {
   }, [search.city]);
 
   const setFilter = (patch: Partial<StationSearch>) => {
+    if (Object.prototype.hasOwnProperty.call(patch, "city")) {
+      hasManuallySelectedCity.current = true;
+    }
     setPage(1);
     navigate({
-      search: (prev: any) => {
-        const updated: any = { ...prev, ...patch };
-        Object.keys(updated).forEach((k) => {
-          if (updated[k] === undefined || updated[k] === null || updated[k] === "") {
-            delete updated[k];
+      search: (prev: StationSearch) => {
+        const updated = { ...prev, ...patch };
+        (Object.keys(updated) as (keyof StationSearch)[]).forEach((key) => {
+          if (updated[key] === undefined || updated[key] === null || updated[key] === "") {
+            delete updated[key];
           }
         });
         return updated;
@@ -90,13 +100,13 @@ function StationsPage() {
     });
   };
 
-  const resetFilters = () => navigate({ search: {} as any });
+  const resetFilters = () => navigate({ search: {} });
 
   // Comprehensive Multi-dimensional Filtering Logic
   const results = useMemo(() => {
     return stations.filter((s) => {
       // 1. City Filter
-      if (search.city && s.city.toLowerCase() !== search.city.toLowerCase()) return false;
+      if (search.city && !matchesCity(s, search.city)) return false;
 
       // 2. Charging Type (DC Fast vs AC)
       if (search.type === "dc") {
@@ -111,7 +121,11 @@ function StationsPage() {
         if (!isDc) return false;
       } else if (search.type === "ac") {
         const isAc = s.connectors.some(
-          (c) => c.toUpperCase().includes("AC") || c.toUpperCase().includes("TYPE 2")
+          (c) =>
+            c.toUpperCase().includes("AC") ||
+            c.toUpperCase().includes("TYPE 2") ||
+            c.toUpperCase().includes("15A") ||
+            c.toUpperCase().includes("SOCKET")
         );
         if (!isAc) return false;
       }

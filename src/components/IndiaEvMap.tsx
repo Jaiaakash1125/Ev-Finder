@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, useId, useCallback } from "react";
 import type * as LType from "leaflet";
 import { Station, stations as allStations, INDIA_CENTER, cityCoordinates, statusMeta } from "../data/stations";
 import { useTheme } from "../lib/theme";
-import { getClosestCity } from "../lib/utils";
+import { getClosestCity, matchesCity } from "../lib/utils";
 
 export type TileStyle = "streets" | "satellite" | "osm";
 
@@ -54,6 +54,7 @@ export interface IndiaEvMapProps {
   showLayerSelector?: boolean | undefined;
   showRangeOverlay?: boolean | undefined;
   enableLocateMe?: boolean | undefined;
+  autoLocateOnLoad?: boolean | undefined;
   className?: string | undefined;
   singleStationMode?: boolean | undefined;
 }
@@ -73,6 +74,7 @@ export function IndiaEvMap({
   showLayerSelector = true,
   showRangeOverlay = true,
   enableLocateMe = true,
+  autoLocateOnLoad = true,
   className = "",
   singleStationMode = false,
 }: IndiaEvMapProps) {
@@ -125,9 +127,7 @@ export function IndiaEvMap({
       });
     } else {
       // Find stations in this city and fit bounds
-      const matchingStations = stations.filter(
-        (s) => s.city.toLowerCase() === cityName.toLowerCase()
-      );
+      const matchingStations = stations.filter((s) => matchesCity(s, cityName));
       if (matchingStations.length > 0) {
         import("leaflet").then((L) => {
           if (!mapInstanceRef.current) return;
@@ -214,7 +214,7 @@ export function IndiaEvMap({
       // If a specific city was passed initially, zoom to it
       if (controlledCity && controlledCity !== "All India") {
         flyToCity(controlledCity);
-      } else if (enableLocateMe && !singleStationMode && !selectedStationId) {
+      } else if (autoLocateOnLoad && enableLocateMe && !singleStationMode && !selectedStationId) {
         // Automatically extract user location and display their area chargers
         handleLocateMe();
       }
@@ -229,7 +229,7 @@ export function IndiaEvMap({
         mapInstanceRef.current = null;
       }
     };
-  }, [isMounted, mapContainerId]);
+  }, [isMounted, mapContainerId, autoLocateOnLoad]);
 
   // Update tile style when switched
   useEffect(() => {
@@ -338,7 +338,10 @@ export function IndiaEvMap({
 
     visibleStations.forEach((station) => {
       const isSelected = selectedStationId === station.id;
-      const googleMapsUrl = (station as any).google_maps_link || `https://www.google.com/maps/dir/?api=1&destination=${station.lat},${station.lng}`;
+      const googleMapsUrl =
+        "google_maps_link" in station && typeof station.google_maps_link === "string"
+          ? station.google_maps_link
+          : `https://www.google.com/maps/dir/?api=1&destination=${station.lat},${station.lng}`;
 
       const markerHtml = `
         <div style="position: relative; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; cursor: pointer;">
@@ -720,8 +723,6 @@ export function IndiaEvMap({
           </div>
         </div>
       )}
-
-
 
       {/* Error message toast */}
       {locationError && (

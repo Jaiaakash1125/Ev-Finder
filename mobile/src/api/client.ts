@@ -1,23 +1,40 @@
 import { stations as fallbackStations, Station, cityCoordinates } from "../data/stations";
 import Constants from "expo-constants";
+import {
+  fetchStations as apiFetchStations,
+  fetchNearbyStations,
+  fetchStationById,
+  searchStations,
+  normalizeStation,
+  stationsApi,
+  FetchStationsResult,
+  FetchStationsParams,
+  API_BASE_URLS,
+} from "./stationsApi";
+
+export {
+  normalizeStation,
+  stationsApi,
+  fetchNearbyStations,
+  fetchStationById,
+  searchStations,
+  FetchStationsResult,
+  FetchStationsParams,
+  API_BASE_URLS,
+};
 
 // Dynamically determine host IP so mobile phones on Wi-Fi can reach the computer's XAMPP server
-const debuggerHost = Constants.expoConfig?.hostUri || Constants.manifest2?.extra?.expoGo?.debuggerHost;
+const debuggerHost =
+  Constants.expoConfig?.hostUri || Constants.manifest2?.extra?.expoGo?.debuggerHost;
 const hostIp = debuggerHost ? debuggerHost.split(":")[0] : "10.52.145.12";
 
-// XAMPP Apache endpoint on host machine
+// Server API endpoints on host machine (REST API v1 endpoints)
 export const XAMPP_API_URLS = [
-  `http://${hostIp}/api/get_stations.php`,
-  `http://${hostIp}/get_stations.php`,
-  `http://localhost/api/get_stations.php`,
+  `http://${hostIp}/api/v1/stations`,
+  `http://localhost/api/v1/stations`,
+  `http://${hostIp}:5000/api/v1/stations`,
+  `http://localhost:5000/api/v1/stations`,
 ];
-
-export interface FetchStationsResult {
-  data: Station[];
-  isLiveDb: boolean;
-  source: "xampp_mysql" | "local_fallback";
-  error?: string;
-}
 
 // Mapping of substrings/districts/aliases to clean major cities
 const CITY_NAME_MAP: [RegExp, string][] = [
@@ -145,106 +162,19 @@ export function cleanCityName(
 }
 
 /**
- * Normalizes raw SQL database records from XAMPP into standard Station objects
+ * Fetch all EV stations using the new /api/v1/stations REST API endpoint,
+ * with graceful fallback to local offline dataset if offline.
  */
-export function normalizeStation(raw: any): Station {
-  let connectors: string[] = [];
-  if (Array.isArray(raw.connectors)) {
-    connectors = raw.connectors;
-  } else if (typeof raw.connectors === "string") {
-    try {
-      connectors = JSON.parse(raw.connectors);
-    } catch {
-      connectors = raw.connectors.split(",").map((c: string) => c.trim());
-    }
-  }
-
-  let amenities: string[] = [];
-  if (Array.isArray(raw.amenities)) {
-    amenities = raw.amenities;
-  } else if (typeof raw.amenities === "string") {
-    try {
-      amenities = JSON.parse(raw.amenities);
-    } catch {
-      amenities = raw.amenities.split(",").map((a: string) => a.trim());
-    }
-  }
-
-  const lat = Number(raw.lat || raw.latitude) || 20.5937;
-  const lng = Number(raw.lng || raw.longitude) || 78.9629;
-  const rawCity = String(raw.city || "");
-  const rawAddress = String(raw.address || "");
-  const rawName = String(raw.name || "");
-
-  const cleanCity = cleanCityName(rawCity, rawAddress, rawName, lat, lng);
-
-  return {
-    id: String(raw.id || raw.place_id || `st-${Math.random().toString(36).substring(2, 9)}`),
-    name: rawName || "EV Charging Station",
-    network: String(raw.network || "Public Charger"),
-    city: cleanCity,
-    state: String(raw.state || "India"),
-    address: rawAddress,
-    pincode: String(raw.pincode || ""),
-    lat,
-    lng,
-    distanceKm: Number(raw.distanceKm) || 0,
-    status: ["available", "limited", "busy", "offline"].includes(raw.status)
-      ? raw.status
-      : "available",
-    freePorts: Number(raw.freePorts ?? 1),
-    totalPorts: Number(raw.totalPorts ?? 2),
-    connectors: connectors.length > 0 ? connectors : ["CCS2"],
-    maxPowerKw: Number(raw.maxPowerKw || 50),
-    pricePerKwh: Number(raw.pricePerKwh || 10),
-    hours: String(raw.hours || "24×7"),
-    amenities: amenities.length > 0 ? amenities : ["Restrooms"],
-    rating: Number(raw.rating || 4.5),
-    reviews: Number(raw.reviews || 0),
-  };
-}
-
-/**
- * Checks XAMPP server with fast timeout; falls back immediately if offline
- */
-export async function fetchStations(): Promise<FetchStationsResult> {
-  for (const url of XAMPP_API_URLS) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 1200);
-
-      const response = await fetch(url, {
-        signal: controller.signal,
-        headers: { Accept: "application/json" },
-      });
-
-      clearTimeout(timeoutId);
-
-      if (response.ok) {
-        const rawData = await response.json();
-        if (Array.isArray(rawData) && rawData.length > 0) {
-          const normalized = rawData.map(normalizeStation);
-          return {
-            data: normalized,
-            isLiveDb: true,
-            source: "xampp_mysql",
-          };
-        }
-      }
-    } catch {
-      // try next
-    }
-  }
-
-  // Fallback to local dataset (exact same as PC website)
-  return {
-    data: fallbackStations,
-    isLiveDb: false,
-    source: "local_fallback",
-  };
+export async function fetchStations(params?: FetchStationsParams): Promise<FetchStationsResult> {
+  return await apiFetchStations(params);
 }
 
 export const api = {
   init: async () => {},
   getStations: fetchStations,
+  getNearbyStations: fetchNearbyStations,
+  getStationById: fetchStationById,
+  searchStations: searchStations,
 };
+
+export default api;
