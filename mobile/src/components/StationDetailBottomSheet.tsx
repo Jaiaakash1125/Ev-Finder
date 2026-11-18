@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import {
   View,
   Text,
@@ -7,22 +7,23 @@ import {
   ScrollView,
   Modal,
 } from "react-native";
-import * as Linking from "expo-linking";
 import {
   X,
   Zap,
   Navigation,
   MapPin,
-  Copy,
+  ArrowRight,
   CheckCircle2,
 } from "lucide-react-native";
 import { Station } from "../types";
 import { darkColors, lightColors, radius, spacing } from "../theme/theme";
+import { openStationDirections } from "../utils/maps";
 
 interface StationDetailBottomSheetProps {
   station: Station | null;
   visible: boolean;
   onClose: () => void;
+  onViewDetails?: (station: Station) => void;
   isDark?: boolean;
 }
 
@@ -30,21 +31,20 @@ export const StationDetailBottomSheet: React.FC<StationDetailBottomSheetProps> =
   station,
   visible,
   onClose,
+  onViewDetails,
   isDark = true,
 }) => {
-  const [copied, setCopied] = useState(false);
   const colors = isDark ? darkColors : lightColors;
 
   if (!station) return null;
 
   const handleOpenDirections = () => {
-    const url = `https://www.google.com/maps/dir/?api=1&destination=${station.lat},${station.lng}`;
-    Linking.openURL(url);
+    openStationDirections(station.lat, station.lng, station.name);
   };
 
-  const handleCopyCoords = () => {
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleViewDetails = () => {
+    onClose();
+    onViewDetails?.(station);
   };
 
   return (
@@ -86,16 +86,18 @@ export const StationDetailBottomSheet: React.FC<StationDetailBottomSheetProps> =
               </Text>
             </View>
 
-            {/* Big Action Buttons Row (Directions & Copy GPS) */}
+            {/* Big Action Buttons Row (View Details & Directions) */}
             <View style={styles.actionButtonsRow}>
-              <TouchableOpacity
-                style={[styles.primaryNavBtn, { backgroundColor: colors.primary }]}
-                onPress={handleOpenDirections}
-                activeOpacity={0.85}
-              >
-                <Navigation size={18} color="#020617" />
-                <Text style={styles.primaryNavText}>Get Directions (Google Maps) ↗</Text>
-              </TouchableOpacity>
+              {onViewDetails ? (
+                <TouchableOpacity
+                  style={[styles.primaryNavBtn, { backgroundColor: colors.accent }]}
+                  onPress={handleViewDetails}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.primaryNavText}>View Details</Text>
+                  <ArrowRight size={17} color="#020617" />
+                </TouchableOpacity>
+              ) : null}
 
               <TouchableOpacity
                 style={[
@@ -105,14 +107,12 @@ export const StationDetailBottomSheet: React.FC<StationDetailBottomSheetProps> =
                     borderColor: colors.border,
                   },
                 ]}
-                onPress={handleCopyCoords}
+                onPress={handleOpenDirections}
                 activeOpacity={0.85}
               >
-                <Copy size={15} color={colors.primary} />
+                <Navigation size={16} color={colors.primary} />
                 <Text style={[styles.secondaryCopyText, { color: colors.primary }]}>
-                  {copied
-                    ? "✓ GPS Coords Copied!"
-                    : `Copy GPS (${station.lat.toFixed(4)}, ${station.lng.toFixed(4)})`}
+                  Get Directions
                 </Text>
               </TouchableOpacity>
             </View>

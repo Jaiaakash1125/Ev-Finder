@@ -7,16 +7,25 @@ import {
   ScrollView,
   Modal,
 } from "react-native";
-import { X, Check, Zap, SlidersHorizontal, RotateCcw } from "lucide-react-native";
+import { X, SlidersHorizontal, RotateCcw } from "lucide-react-native";
 import { darkColors, lightColors, radius, spacing } from "../theme/theme";
+import type { StationStatus } from "../types";
 
 export interface FilterState {
   city: string;
   minPowerKw: number;
   connector: string | null;
   network: string | null;
-  onlyAvailable: boolean;
+  status: StationStatus | null;
 }
+
+export const DEFAULT_FILTERS: FilterState = {
+  city: "All India",
+  minPowerKw: 0,
+  connector: null,
+  network: null,
+  status: null,
+};
 
 interface FilterModalProps {
   visible: boolean;
@@ -24,8 +33,9 @@ interface FilterModalProps {
   filters: FilterState;
   onApplyFilters: (filters: FilterState) => void;
   onResetFilters: () => void;
-  totalMatchingStations: number;
-  isDark: boolean;
+  totalMatchingStations?: number;
+  showCitySection?: boolean;
+  isDark?: boolean;
 }
 
 const CITIES = [
@@ -52,10 +62,10 @@ const CITIES = [
 
 const SPEED_TIERS = [
   { label: "All Speeds", minKw: 0 },
-  { label: "⚡ Fast DC (≥50 kW)", minKw: 50 },
-  { label: "⚡ Rapid (≥100 kW)", minKw: 100 },
-  { label: "⚡ Ultra (≥150 kW)", minKw: 150 },
-  { label: "⚡ Hyper (≥240 kW)", minKw: 240 },
+  { label: "Fast DC (≥50 kW)", minKw: 50 },
+  { label: "Rapid (≥100 kW)", minKw: 100 },
+  { label: "Ultra (≥150 kW)", minKw: 150 },
+  { label: "Hyper (≥240 kW)", minKw: 240 },
 ];
 
 const CONNECTORS = [
@@ -63,6 +73,14 @@ const CONNECTORS = [
   { id: "Type 2", label: "Type 2 AC" },
   { id: "CHAdeMO", label: "CHAdeMO" },
   { id: "GB/T", label: "GB/T" },
+];
+
+const STATUS_OPTIONS: { id: StationStatus | null; label: string; colorKey?: "success" | "warning" | "destructive" }[] = [
+  { id: null, label: "All Statuses" },
+  { id: "available", label: "Available", colorKey: "success" },
+  { id: "limited", label: "Limited", colorKey: "warning" },
+  { id: "busy", label: "Busy", colorKey: "warning" },
+  { id: "offline", label: "Offline", colorKey: "destructive" },
 ];
 
 const NETWORKS = [
@@ -86,7 +104,8 @@ export const FilterModal: React.FC<FilterModalProps> = ({
   onApplyFilters,
   onResetFilters,
   totalMatchingStations,
-  isDark,
+  showCitySection = true,
+  isDark = true,
 }) => {
   const colors = isDark ? darkColors : lightColors;
   const [localFilters, setLocalFilters] = React.useState<FilterState>(filters);
@@ -96,11 +115,11 @@ export const FilterModal: React.FC<FilterModalProps> = ({
   }, [filters, visible]);
 
   const activeCount = [
-    localFilters.city !== "All India",
+    showCitySection && localFilters.city !== "All India",
     localFilters.minPowerKw > 0,
     localFilters.connector !== null,
     localFilters.network !== null,
-    localFilters.onlyAvailable,
+    localFilters.status !== null,
   ].filter(Boolean).length;
 
   const handleApply = () => {
@@ -109,15 +128,13 @@ export const FilterModal: React.FC<FilterModalProps> = ({
   };
 
   const handleReset = () => {
-    const defaultState: FilterState = {
-      city: "All India",
-      minPowerKw: 0,
-      connector: null,
-      network: null,
-      onlyAvailable: false,
+    const resetState: FilterState = {
+      ...DEFAULT_FILTERS,
+      city: showCitySection ? "All India" : localFilters.city,
     };
-    setLocalFilters(defaultState);
+    setLocalFilters(resetState);
     onResetFilters();
+    onClose();
   };
 
   return (
@@ -137,7 +154,12 @@ export const FilterModal: React.FC<FilterModalProps> = ({
               <SlidersHorizontal size={18} color={colors.primary} />
               <Text style={[styles.headerTitle, { color: colors.foreground }]}>Filter Stations</Text>
               {activeCount > 0 && (
-                <View style={[styles.activeBadge, { backgroundColor: "rgba(56, 189, 248, 0.15)", borderColor: colors.primary }]}>
+                <View
+                  style={[
+                    styles.activeBadge,
+                    { backgroundColor: "rgba(56, 189, 248, 0.15)", borderColor: colors.primary },
+                  ]}
+                >
                   <Text style={[styles.activeBadgeText, { color: colors.primary }]}>
                     {activeCount} active
                   </Text>
@@ -151,43 +173,45 @@ export const FilterModal: React.FC<FilterModalProps> = ({
           </View>
 
           <ScrollView style={styles.scrollBody} showsVerticalScrollIndicator={false}>
-            {/* 1. City / Region */}
-            <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.frost }]}>CITY / REGION</Text>
-              <View style={styles.chipRow}>
-                {CITIES.map((city) => {
-                  const active = localFilters.city === city;
-                  return (
-                    <TouchableOpacity
-                      key={city}
-                      style={[
-                        styles.chip,
-                        {
-                          backgroundColor: active ? colors.primary : colors.backgroundInput,
-                          borderColor: active ? colors.primary : colors.borderSubtle,
-                        },
-                      ]}
-                      onPress={() => setLocalFilters({ ...localFilters, city })}
-                      activeOpacity={0.7}
-                    >
-                      <Text
+            {/* 1. City / Region (optional) */}
+            {showCitySection && (
+              <View style={styles.section}>
+                <Text style={[styles.sectionTitle, { color: colors.frost }]}>CITY / REGION</Text>
+                <View style={styles.chipRow}>
+                  {CITIES.map((city) => {
+                    const active = localFilters.city === city;
+                    return (
+                      <TouchableOpacity
+                        key={city}
                         style={[
-                          styles.chipText,
-                          { color: active ? "#020617" : colors.foreground },
-                          active && styles.boldText,
+                          styles.chip,
+                          {
+                            backgroundColor: active ? colors.primary : colors.backgroundInput,
+                            borderColor: active ? colors.primary : colors.borderSubtle,
+                          },
                         ]}
+                        onPress={() => setLocalFilters({ ...localFilters, city })}
+                        activeOpacity={0.7}
                       >
-                        {city}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
+                        <Text
+                          style={[
+                            styles.chipText,
+                            { color: active ? "#020617" : colors.foreground },
+                            active && styles.boldText,
+                          ]}
+                        >
+                          {city}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
               </View>
-            </View>
+            )}
 
-            {/* 2. Speed / Charging Speed Tiers */}
+            {/* 2. Charging Speed Tiers */}
             <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.frost }]}>CHARGING SPEED TIER</Text>
+              <Text style={[styles.sectionTitle, { color: colors.frost }]}>MINIMUM POWER</Text>
               <View style={styles.chipRow}>
                 {SPEED_TIERS.map((tier) => {
                   const active = localFilters.minPowerKw === tier.minKw;
@@ -219,7 +243,7 @@ export const FilterModal: React.FC<FilterModalProps> = ({
               </View>
             </View>
 
-            {/* 3. Supported Connector Type */}
+            {/* 3. Connector Type */}
             <View style={styles.section}>
               <Text style={[styles.sectionTitle, { color: colors.frost }]}>CONNECTOR TYPE</Text>
               <View style={styles.chipRow}>
@@ -250,7 +274,7 @@ export const FilterModal: React.FC<FilterModalProps> = ({
                           active && styles.boldText,
                         ]}
                       >
-                        🔌 {c.label}
+                        {c.label}
                       </Text>
                     </TouchableOpacity>
                   );
@@ -258,61 +282,49 @@ export const FilterModal: React.FC<FilterModalProps> = ({
               </View>
             </View>
 
-            {/* 4. Live Availability */}
+            {/* 4. Station Status */}
             <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.frost }]}>AVAILABILITY</Text>
+              <Text style={[styles.sectionTitle, { color: colors.frost }]}>STATUS</Text>
               <View style={styles.chipRow}>
-                <TouchableOpacity
-                  style={[
-                    styles.chip,
-                    {
-                      backgroundColor: !localFilters.onlyAvailable
-                        ? colors.primary
-                        : colors.backgroundInput,
-                      borderColor: !localFilters.onlyAvailable ? colors.primary : colors.borderSubtle,
-                    },
-                  ]}
-                  onPress={() => setLocalFilters({ ...localFilters, onlyAvailable: false })}
-                  activeOpacity={0.7}
-                >
-                  <Text
-                    style={[
-                      styles.chipText,
-                      { color: !localFilters.onlyAvailable ? "#020617" : colors.foreground },
-                      !localFilters.onlyAvailable && styles.boldText,
-                    ]}
-                  >
-                    Show All Stations
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.chip,
-                    {
-                      backgroundColor: localFilters.onlyAvailable
-                        ? colors.success
-                        : colors.backgroundInput,
-                      borderColor: localFilters.onlyAvailable ? colors.success : colors.borderSubtle,
-                    },
-                  ]}
-                  onPress={() => setLocalFilters({ ...localFilters, onlyAvailable: true })}
-                  activeOpacity={0.7}
-                >
-                  <Text
-                    style={[
-                      styles.chipText,
-                      { color: localFilters.onlyAvailable ? "#020617" : colors.foreground },
-                      localFilters.onlyAvailable && styles.boldText,
-                    ]}
-                  >
-                    🟢 Available Free Only
-                  </Text>
-                </TouchableOpacity>
+                {STATUS_OPTIONS.map((opt) => {
+                  const active = localFilters.status === opt.id;
+                  const activeBg =
+                    opt.colorKey === "success"
+                      ? colors.success
+                      : opt.colorKey === "warning"
+                        ? colors.warning
+                        : opt.colorKey === "destructive"
+                          ? colors.destructive
+                          : colors.primary;
+                  return (
+                    <TouchableOpacity
+                      key={opt.label}
+                      style={[
+                        styles.chip,
+                        {
+                          backgroundColor: active ? activeBg : colors.backgroundInput,
+                          borderColor: active ? activeBg : colors.borderSubtle,
+                        },
+                      ]}
+                      onPress={() => setLocalFilters({ ...localFilters, status: opt.id })}
+                      activeOpacity={0.7}
+                    >
+                      <Text
+                        style={[
+                          styles.chipText,
+                          { color: active ? "#020617" : colors.foreground },
+                          active && styles.boldText,
+                        ]}
+                      >
+                        {opt.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             </View>
 
-            {/* 5. Network Brand */}
+            {/* 5. Charging Network */}
             <View style={styles.section}>
               <Text style={[styles.sectionTitle, { color: colors.frost }]}>CHARGING NETWORK</Text>
               <View style={styles.chipRow}>
@@ -320,10 +332,10 @@ export const FilterModal: React.FC<FilterModalProps> = ({
                   style={[
                     styles.chip,
                     {
-                      backgroundColor: localFilters.network === null
-                        ? colors.primary
-                        : colors.backgroundInput,
-                      borderColor: localFilters.network === null ? colors.primary : colors.borderSubtle,
+                      backgroundColor:
+                        localFilters.network === null ? colors.primary : colors.backgroundInput,
+                      borderColor:
+                        localFilters.network === null ? colors.primary : colors.borderSubtle,
                     },
                   ]}
                   onPress={() => setLocalFilters({ ...localFilters, network: null })}
@@ -367,7 +379,7 @@ export const FilterModal: React.FC<FilterModalProps> = ({
                           active && styles.boldText,
                         ]}
                       >
-                        ⚡ {net}
+                        {net}
                       </Text>
                     </TouchableOpacity>
                   );
@@ -384,7 +396,7 @@ export const FilterModal: React.FC<FilterModalProps> = ({
               activeOpacity={0.7}
             >
               <RotateCcw size={15} color={colors.frost} />
-              <Text style={[styles.resetText, { color: colors.frost }]}>Reset All</Text>
+              <Text style={[styles.resetText, { color: colors.frost }]}>Reset</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -393,7 +405,9 @@ export const FilterModal: React.FC<FilterModalProps> = ({
               activeOpacity={0.85}
             >
               <Text style={styles.applyBtnText}>
-                Show {totalMatchingStations} Stations
+                {typeof totalMatchingStations === "number"
+                  ? `Apply Filters (${totalMatchingStations.toLocaleString()})`
+                  : "Apply Filters"}
               </Text>
             </TouchableOpacity>
           </View>

@@ -1,42 +1,52 @@
-import { stations as fallbackStations, Station, cityCoordinates } from "../data/stations";
-import Constants from "expo-constants";
+import { cityCoordinates } from "../constants/cities";
+import { API_BASE_URL } from "./config";
 import {
-  fetchStations as apiFetchStations,
+  api as stationsApi,
+  ApiError,
+  checkApiHealth,
+  fetchCities,
   fetchNearbyStations,
   fetchStationById,
-  searchStations,
+  fetchStationReviews,
+  fetchStations,
+  fetchStationsInBounds,
+  getErrorMessage,
+  isAbortError,
   normalizeStation,
-  stationsApi,
-  FetchStationsResult,
-  FetchStationsParams,
-  API_BASE_URLS,
+  postStationReview,
+  searchStations,
+  type BoundsParams,
+  type CreateReviewInput,
+  type FetchStationsParams,
+  type FetchStationsResult,
+  type HealthResponse,
+  type NearbyStationsParams,
 } from "./stationsApi";
 
 export {
-  normalizeStation,
-  stationsApi,
+  API_BASE_URL,
+  ApiError,
+  checkApiHealth,
+  fetchCities,
   fetchNearbyStations,
   fetchStationById,
+  fetchStationReviews,
+  fetchStations,
+  fetchStationsInBounds,
+  getErrorMessage,
+  isAbortError,
+  normalizeStation,
+  postStationReview,
   searchStations,
-  FetchStationsResult,
-  FetchStationsParams,
-  API_BASE_URLS,
+  stationsApi,
+  type BoundsParams,
+  type CreateReviewInput,
+  type FetchStationsParams,
+  type FetchStationsResult,
+  type HealthResponse,
+  type NearbyStationsParams,
 };
 
-// Dynamically determine host IP so mobile phones on Wi-Fi can reach the computer's XAMPP server
-const debuggerHost =
-  Constants.expoConfig?.hostUri || Constants.manifest2?.extra?.expoGo?.debuggerHost;
-const hostIp = debuggerHost ? debuggerHost.split(":")[0] : "10.52.145.12";
-
-// Server API endpoints on host machine (REST API v1 endpoints)
-export const XAMPP_API_URLS = [
-  `http://${hostIp}/api/v1/stations`,
-  `http://localhost/api/v1/stations`,
-  `http://${hostIp}:5000/api/v1/stations`,
-  `http://localhost:5000/api/v1/stations`,
-];
-
-// Mapping of substrings/districts/aliases to clean major cities
 const CITY_NAME_MAP: [RegExp, string][] = [
   [/bengaluru|bangalore/i, "Bengaluru"],
   [/mumbai|bombay|navi mumbai|thane|borivali|andheri|nariman/i, "Mumbai"],
@@ -109,7 +119,7 @@ export function cleanCityName(
     }
   }
 
-  if (lat && lng && !isNaN(lat) && !isNaN(lng) && lat !== 0) {
+  if (lat && lng && !Number.isNaN(lat) && !Number.isNaN(lng) && lat !== 0) {
     let closestCity = "";
     let minDistance = 45;
 
@@ -127,32 +137,9 @@ export function cleanCityName(
   }
 
   if (rawCity) {
-    let c = rawCity.trim();
-    c = c.replace(/^[0-9\-\+\s]+/, "").trim();
+    let c = rawCity.trim().replace(/^[0-9\-+\s]+/, "").trim();
     if (c.includes(",")) c = c.split(",")[0]?.trim() || "";
     if (c.includes(":")) c = c.split(":")[0]?.trim() || "";
-    if (
-      c.length > 20 ||
-      /dealer|service|station|industrial|highway|toll|sector|opposite|petroleum/i.test(c)
-    ) {
-      if (rawAddress) {
-        const parts = rawAddress
-          .split(",")
-          .map((p) => p.trim())
-          .filter(Boolean);
-        for (let i = parts.length - 1; i >= 0; i--) {
-          const part = parts[i] || "";
-          if (
-            part.length > 2 &&
-            part.length < 20 &&
-            !/^\d+$/.test(part) &&
-            !/india/i.test(part)
-          ) {
-            return part;
-          }
-        }
-      }
-    }
     if (c.length > 2 && c.length <= 25) {
       return c;
     }
@@ -161,20 +148,11 @@ export function cleanCityName(
   return "Bengaluru";
 }
 
-/**
- * Fetch all EV stations using the new /api/v1/stations REST API endpoint,
- * with graceful fallback to local offline dataset if offline.
- */
-export async function fetchStations(params?: FetchStationsParams): Promise<FetchStationsResult> {
-  return await apiFetchStations(params);
-}
-
 export const api = {
+  ...stationsApi,
   init: async () => {},
-  getStations: fetchStations,
   getNearbyStations: fetchNearbyStations,
   getStationById: fetchStationById,
-  searchStations: searchStations,
 };
 
 export default api;

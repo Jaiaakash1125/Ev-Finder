@@ -1,21 +1,55 @@
-import { stations as fallbackStations } from "../data/stations";
-import { Station } from "../types";
-import Constants from "expo-constants";
+import { ReviewItem, Station } from "../types";
+import { API_BASE_URL, API_TIMEOUT_MS } from "./config";
 
-// Machine's active IPv4 address from ipconfig so real phones/Expo Go on local Wi-Fi can reach the server
-export const BASE_URL = "http://192.168.29.236/api/v1";
+export { API_BASE_URL };
 
-// Dynamically determine host IP as backup if running on physical device with Expo debuggerHost
-const debuggerHost =
-  Constants.expoConfig?.hostUri || Constants.manifest2?.extra?.expoGo?.debuggerHost;
-const hostIp = debuggerHost ? debuggerHost.split(":")[0] : "192.168.29.236";
+export interface ApiErrorOptions {
+  status?: number;
+  isNetworkError?: boolean;
+  isTimeout?: boolean;
+  isAborted?: boolean;
+}
 
-export const API_BASE_URLS = [
-  BASE_URL,
-  `http://${hostIp}/api/v1`,
-  `http://localhost/api/v1`,
-  `http://127.0.0.1/api/v1`,
-];
+export class ApiError extends Error {
+  status?: number;
+  isNetworkError: boolean;
+  isTimeout: boolean;
+  isAborted: boolean;
+
+  constructor(message: string, options: ApiErrorOptions = {}) {
+    super(message);
+    this.name = "ApiError";
+    this.status = options.status;
+    this.isNetworkError = Boolean(options.isNetworkError);
+    this.isTimeout = Boolean(options.isTimeout);
+    this.isAborted = Boolean(options.isAborted);
+  }
+}
+
+export function isAbortError(error: unknown): boolean {
+  if (error instanceof ApiError) {
+    return error.isAborted;
+  }
+  return error instanceof Error && error.name === "AbortError";
+}
+
+export function getErrorMessage(error: unknown, fallback = "Can't reach server"): string {
+  if (error instanceof ApiError) {
+    return error.message;
+  }
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return fallback;
+}
+
+export interface ApiRequestOptions {
+  method?: "GET" | "POST" | "PUT" | "DELETE";
+  body?: unknown;
+  signal?: AbortSignal;
+  timeoutMs?: number;
+  headers?: Record<string, string>;
+}
 
 export interface FetchStationsResult {
   success: boolean;
@@ -23,10 +57,7 @@ export interface FetchStationsResult {
   total: number;
   page: number;
   pages: number;
-  count?: number;
-  isLiveDb?: boolean;
-  source?: "xampp_mysql" | "local_fallback";
-  error?: string;
+  count: number;
 }
 
 export interface FetchStationsParams {
@@ -63,300 +94,446 @@ export interface BoundsParams {
 
 export interface HealthResponse {
   status: string;
-  service: string;
-  version: string;
+  service?: string;
+  version?: string;
   database?: string;
-  stations?: number;
+  stations: number;
   totalStationsInDb?: number;
-  timestamp: string;
+  timestamp?: string;
+}
+
+export interface CreateReviewInput {
+  userName?: string;
+  rating: number;
+  comment?: string;
+  plugCondition: ReviewItem["plugCondition"];
 }
 
 /**
- * Normalizes raw API response station item to ensure all fields match TypeScript types
+ * Normalizes a raw API station record to match the Station TypeScript type.
  */
 export function normalizeStation(raw: any): Station {
   let connectors: string[] = [];
-  if (Array.isArray(raw.connectors)) {
-    connectors = raw.connectors;
-  } else if (typeof raw.connectors === "string") {
+  if (Array.isArray(raw?.connectors)) {
+    connectors = raw.connectors.map(String);
+  } else if (typeof raw?.connectors === "string" && raw.connectors.trim()) {
     try {
-      connectors = JSON.parse(raw.connectors);
+      const parsed = JSON.parse(raw.connectors);
+      connectors = Array.isArray(parsed) ? parsed.map(String) : [];
     } catch {
-      connectors = raw.connectors.split(",").map((c: string) => c.trim());
+      connectors = raw.connectors
+        .split(",")
+        .map((c: string) => c.trim())
+        .filter(Boolean);
     }
   }
 
   let amenities: string[] = [];
-  if (Array.isArray(raw.amenities)) {
-    amenities = raw.amenities;
-  } else if (typeof raw.amenities === "string") {
+  if (Array.isArray(raw?.amenities)) {
+    amenities = raw.amenities.map(String);
+  } else if (typeof raw?.amenities === "string" && raw.amenities.trim()) {
     try {
-      amenities = JSON.parse(raw.amenities);
+      const parsed = JSON.parse(raw.amenities);
+      amenities = Array.isArray(parsed) ? parsed.map(String) : [];
     } catch {
-      amenities = raw.amenities.split(",").map((a: string) => a.trim());
+      amenities = raw.amenities
+        .split(",")
+        .map((a: string) => a.trim())
+        .filter(Boolean);
     }
   }
 
+  const rawDistance = raw?.distanceKm ?? raw?.distance_km;
+  const distanceKm =
+    rawDistance !== undefined && rawDistance !== null && !Number.isNaN(Number(rawDistance))
+      ? Number(rawDistance)
+      : undefined;
+
   return {
-    id: String(raw.id || `st-${Math.random().toString(36).substring(2, 9)}`),
-    name: String(raw.name || "EV Charging Station"),
-    network: String(raw.network || "Public Charger"),
-    city: String(raw.city || ""),
-    state: String(raw.state || "India"),
-    address: String(raw.address || ""),
-    pincode: String(raw.pincode || ""),
-    lat: Number(raw.lat || raw.latitude) || 20.5937,
-    lng: Number(raw.lng || raw.longitude) || 78.9629,
-    distanceKm: Number(raw.distanceKm ?? raw.distance_km) || 0,
-    status: ["available", "limited", "busy", "offline"].includes(raw.status)
+    id: String(raw?.id ?? ""),
+    name: String(raw?.name || "EV Charging Station"),
+    network: String(raw?.network || "Public Charger"),
+    city: String(raw?.city || ""),
+    state: String(raw?.state || "India"),
+    address: String(raw?.address || ""),
+    pincode: String(raw?.pincode || ""),
+    lat: Number(raw?.lat ?? raw?.latitude) || 20.5937,
+    lng: Number(raw?.lng ?? raw?.longitude) || 78.9629,
+    distanceKm,
+    status: ["available", "limited", "busy", "offline"].includes(raw?.status)
       ? raw.status
       : "available",
-    freePorts: Number(raw.freePorts ?? raw.free_ports ?? 1),
-    totalPorts: Number(raw.totalPorts ?? raw.total_ports ?? 2),
+    freePorts: Number(raw?.freePorts ?? raw?.free_ports ?? 0),
+    totalPorts: Number(raw?.totalPorts ?? raw?.total_ports ?? 1),
     connectors: connectors.length > 0 ? connectors : ["CCS2", "Type 2 AC"],
-    maxPowerKw: Number(raw.maxPowerKw ?? raw.max_power_kw ?? 50),
-    pricePerKwh: Number(raw.pricePerKwh ?? raw.price_per_kwh ?? 10),
-    hours: String(raw.hours || "24×7"),
-    amenities: amenities.length > 0 ? amenities : ["Restrooms"],
-    rating: Number(raw.rating || 4.5),
-    reviews: Number(raw.reviews || 0),
-    isFavorite: Boolean(raw.isFavorite),
+    maxPowerKw: Number(raw?.maxPowerKw ?? raw?.max_power_kw ?? 50),
+    pricePerKwh: Number(raw?.pricePerKwh ?? raw?.price_per_kwh ?? 10),
+    hours: String(raw?.hours || "24×7"),
+    amenities,
+    rating: Number(raw?.rating ?? 0),
+    reviews: Number(raw?.reviews ?? 0),
+    isFavorite: Boolean(raw?.isFavorite),
+  };
+}
+
+function normalizeReview(raw: any): ReviewItem {
+  const validConditions: ReviewItem["plugCondition"][] = [
+    "working_perfect",
+    "slow_charge",
+    "broken_connector",
+  ];
+  const condition = validConditions.includes(raw?.plugCondition ?? raw?.plug_condition)
+    ? (raw?.plugCondition ?? raw?.plug_condition)
+    : "working_perfect";
+
+  return {
+    id: String(raw?.id ?? ""),
+    stationId: String(raw?.stationId ?? raw?.station_id ?? ""),
+    userName: String(raw?.userName ?? raw?.user_name ?? "EV Driver"),
+    rating: Number(raw?.rating ?? 5),
+    comment: String(raw?.comment ?? ""),
+    plugCondition: condition,
+    createdAt: String(raw?.createdAt ?? raw?.created_at ?? ""),
+  };
+}
+
+function buildQuery(params: Record<string, string | number | undefined | null>): string {
+  const parts: string[] = [];
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== "") {
+      parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`);
+    }
+  }
+  return parts.length > 0 ? `?${parts.join("&")}` : "";
+}
+
+/**
+ * Core fetch helper with timeout, AbortController support, and clear error messages.
+ */
+async function apiFetch<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
+  const { method = "GET", body, signal, timeoutMs = API_TIMEOUT_MS, headers } = options;
+  const urlPath = path.startsWith("/") ? path : `/${path}`;
+  const url = `${API_BASE_URL}${urlPath}`;
+
+  if (signal?.aborted) {
+    throw new ApiError("Request cancelled", { isAborted: true });
+  }
+
+  const controller = new AbortController();
+  let didTimeout = false;
+
+  const onExternalAbort = () => controller.abort();
+  signal?.addEventListener("abort", onExternalAbort);
+
+  const timeoutId = setTimeout(() => {
+    didTimeout = true;
+    controller.abort();
+  }, timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      method,
+      signal: controller.signal,
+      headers: {
+        Accept: "application/json",
+        ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+        ...(headers || {}),
+      },
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+    });
+
+    const text = await response.text();
+    let payload: any = null;
+    if (text) {
+      try {
+        payload = JSON.parse(text);
+      } catch {
+        payload = null;
+      }
+    }
+
+    if (!response.ok) {
+      const serverMsg =
+        payload?.error ||
+        payload?.message ||
+        `Server returned error (${response.status})`;
+      throw new ApiError(String(serverMsg), { status: response.status });
+    }
+
+    if (payload === null) {
+      throw new ApiError("Invalid JSON response from server", { status: response.status });
+    }
+
+    return payload as T;
+  } catch (error: unknown) {
+    if (error instanceof ApiError) {
+      throw error;
+    }
+
+    if (signal?.aborted) {
+      throw new ApiError("Request cancelled", { isAborted: true });
+    }
+
+    if (didTimeout) {
+      throw new ApiError(
+        `Request timed out. Can't reach server at ${API_BASE_URL}.`,
+        { isTimeout: true, isNetworkError: true }
+      );
+    }
+
+    throw new ApiError(
+      `Can't reach server at ${API_BASE_URL}. Check Wi-Fi and EXPO_PUBLIC_API_URL.`,
+      { isNetworkError: true }
+    );
+  } finally {
+    clearTimeout(timeoutId);
+    signal?.removeEventListener("abort", onExternalAbort);
+  }
+}
+
+/**
+ * GET /health
+ */
+export async function checkApiHealth(signal?: AbortSignal): Promise<HealthResponse> {
+  const res = await apiFetch<HealthResponse>("/health", { signal, timeoutMs: 5000 });
+  return {
+    ...res,
+    stations: Number(res.stations ?? res.totalStationsInDb ?? 0),
   };
 }
 
 /**
- * Executes a fetch across candidate base URLs with automatic fallback
+ * GET /stations?page&limit&city&state&network&connector&min_power_kw&status&q
  */
-async function fetchFromApi<T>(path: string, options?: RequestInit, timeoutMs = 3000): Promise<T | null> {
-  const urlPath = path.startsWith("/") ? path : `/${path}`;
-  for (const baseUrl of API_BASE_URLS) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-      const url = `${baseUrl}${urlPath}`;
-
-      const response = await fetch(url, {
-        ...options,
-        signal: controller.signal,
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-          ...(options?.headers || {}),
-        },
-      });
-
-      clearTimeout(timeoutId);
-
-      if (response.ok) {
-        return (await response.json()) as T;
-      }
-    } catch {
-      // try next candidate base URL
-    }
-  }
-  return null;
-}
-
-/**
- * Fetch stations near a location (GET /api/v1/stations/nearby)
- * Usage: api.nearby(lat, lng, radius)
- */
-export async function nearby(
-  lat: number,
-  lng: number,
-  radius_km: number = 10,
-  extraParams?: Partial<Omit<NearbyStationsParams, "lat" | "lng" | "radius_km">>
+export async function fetchStations(
+  params?: FetchStationsParams,
+  signal?: AbortSignal
 ): Promise<FetchStationsResult> {
-  return await fetchNearbyStations({ lat, lng, radius_km, ...extraParams });
-}
+  const query = buildQuery({
+    page: params?.page,
+    limit: params?.limit,
+    offset: params?.offset,
+    city: params?.city && params.city !== "All India" ? params.city : undefined,
+    state: params?.state,
+    network: params?.network,
+    status: params?.status,
+    connector: params?.connector,
+    min_power_kw: params?.min_power_kw,
+    q: params?.q,
+  });
 
-export async function fetchNearbyStations(params: NearbyStationsParams): Promise<FetchStationsResult> {
-  const queryParts: string[] = [
-    `lat=${encodeURIComponent(params.lat)}`,
-    `lng=${encodeURIComponent(params.lng)}`,
-  ];
-  if (params.radius_km !== undefined) queryParts.push(`radius_km=${encodeURIComponent(params.radius_km)}`);
-  if (params.limit !== undefined) queryParts.push(`limit=${encodeURIComponent(params.limit)}`);
-  if (params.connector) queryParts.push(`connector=${encodeURIComponent(params.connector)}`);
-  if (params.min_power_kw) queryParts.push(`min_power_kw=${encodeURIComponent(params.min_power_kw)}`);
-  if (params.network) queryParts.push(`network=${encodeURIComponent(params.network)}`);
-  if (params.status) queryParts.push(`status=${encodeURIComponent(params.status)}`);
-
-  const result = await fetchFromApi<{
+  const res = await apiFetch<{
     success: boolean;
-    count: number;
+    count?: number;
     total?: number;
     page?: number;
     pages?: number;
     data: any[];
-  }>(`/stations/nearby?${queryParts.join("&")}`);
+  }>(`/stations${query}`, { signal });
 
-  if (result && Array.isArray(result.data)) {
-    const list = result.data.map(normalizeStation);
-    return {
-      success: true,
-      data: list,
-      total: result.total ?? list.length,
-      page: result.page ?? 1,
-      pages: result.pages ?? 1,
-      count: list.length,
-      isLiveDb: true,
-      source: "xampp_mysql",
-    };
-  }
-
-  // Fallback to local calculation
+  const list = Array.isArray(res.data) ? res.data.map(normalizeStation) : [];
   return {
-    success: false,
-    data: [],
-    total: 0,
-    page: 1,
-    pages: 1,
-    count: 0,
-    isLiveDb: false,
-    source: "local_fallback",
+    success: Boolean(res.success ?? true),
+    data: list,
+    count: res.count ?? list.length,
+    total: res.total ?? list.length,
+    page: res.page ?? params?.page ?? 1,
+    pages: res.pages ?? 1,
   };
 }
 
 /**
- * Fetch stations within a map viewport bounding box (GET /api/v1/stations/bounds)
- * Usage: api.bounds(min_lat, min_lng, max_lat, max_lng, limit)
+ * GET /stations/nearby?lat&lng&radius_km&limit&connector&min_power_kw&network&status
  */
+export async function fetchNearbyStations(
+  params: NearbyStationsParams,
+  signal?: AbortSignal
+): Promise<FetchStationsResult> {
+  const query = buildQuery({
+    lat: params.lat,
+    lng: params.lng,
+    radius_km: params.radius_km,
+    limit: params.limit,
+    connector: params.connector,
+    min_power_kw: params.min_power_kw,
+    network: params.network,
+    status: params.status,
+  });
+
+  const res = await apiFetch<{
+    success: boolean;
+    count?: number;
+    total?: number;
+    page?: number;
+    pages?: number;
+    data: any[];
+  }>(`/stations/nearby${query}`, { signal });
+
+  const list = Array.isArray(res.data) ? res.data.map(normalizeStation) : [];
+  return {
+    success: Boolean(res.success ?? true),
+    data: list,
+    count: res.count ?? list.length,
+    total: res.total ?? list.length,
+    page: res.page ?? 1,
+    pages: res.pages ?? 1,
+  };
+}
+
+export async function nearby(
+  lat: number,
+  lng: number,
+  radius_km = 25,
+  extraParams?: Partial<Omit<NearbyStationsParams, "lat" | "lng" | "radius_km">>,
+  signal?: AbortSignal
+): Promise<FetchStationsResult> {
+  return fetchNearbyStations({ lat, lng, radius_km, ...extraParams }, signal);
+}
+
+/**
+ * GET /stations/bounds?min_lat&min_lng&max_lat&max_lng&limit
+ */
+export async function fetchStationsInBounds(
+  params: BoundsParams,
+  signal?: AbortSignal
+): Promise<Station[]> {
+  const query = buildQuery({
+    min_lat: params.min_lat,
+    min_lng: params.min_lng,
+    max_lat: params.max_lat,
+    max_lng: params.max_lng,
+    limit: params.limit,
+  });
+
+  const res = await apiFetch<{ success: boolean; data: any[] }>(`/stations/bounds${query}`, {
+    signal,
+  });
+
+  return Array.isArray(res.data) ? res.data.map(normalizeStation) : [];
+}
+
 export async function bounds(
   min_lat: number,
   min_lng: number,
   max_lat: number,
   max_lng: number,
-  limit = 200
+  limit = 300,
+  signal?: AbortSignal
 ): Promise<FetchStationsResult> {
-  const data = await fetchStationsInBounds({ min_lat, min_lng, max_lat, max_lng, limit });
+  const data = await fetchStationsInBounds({ min_lat, min_lng, max_lat, max_lng, limit }, signal);
   return {
     success: true,
     data,
+    count: data.length,
     total: data.length,
     page: 1,
     pages: 1,
-    count: data.length,
-    isLiveDb: true,
-    source: "xampp_mysql",
-  };
-}
-
-export async function fetchStationsInBounds(params: BoundsParams): Promise<Station[]> {
-  const query = `min_lat=${params.min_lat}&min_lng=${params.min_lng}&max_lat=${params.max_lat}&max_lng=${params.max_lng}${
-    params.limit ? `&limit=${params.limit}` : ""
-  }`;
-  const result = await fetchFromApi<{ success: boolean; data: any[] }>(`/stations/bounds?${query}`);
-  if (result && Array.isArray(result.data)) {
-    return result.data.map(normalizeStation);
-  }
-  return [];
-}
-
-/**
- * Fetch paginated/filtered stations from the REST API (GET /api/v1/stations)
- */
-export async function fetchStations(params?: FetchStationsParams): Promise<FetchStationsResult> {
-  const queryParts: string[] = [];
-  if (params) {
-    if (params.limit !== undefined) queryParts.push(`limit=${encodeURIComponent(params.limit)}`);
-    if (params.offset !== undefined) queryParts.push(`offset=${encodeURIComponent(params.offset)}`);
-    if (params.page !== undefined) queryParts.push(`page=${encodeURIComponent(params.page)}`);
-    if (params.city) queryParts.push(`city=${encodeURIComponent(params.city)}`);
-    if (params.state) queryParts.push(`state=${encodeURIComponent(params.state)}`);
-    if (params.network) queryParts.push(`network=${encodeURIComponent(params.network)}`);
-    if (params.status) queryParts.push(`status=${encodeURIComponent(params.status)}`);
-    if (params.connector) queryParts.push(`connector=${encodeURIComponent(params.connector)}`);
-    if (params.min_power_kw) queryParts.push(`min_power_kw=${encodeURIComponent(params.min_power_kw)}`);
-    if (params.q) queryParts.push(`q=${encodeURIComponent(params.q)}`);
-  }
-
-  const queryString = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-  const result = await fetchFromApi<{
-    success: boolean;
-    count: number;
-    total: number;
-    page: number;
-    pages: number;
-    data: any[];
-  }>(`/stations${queryString}`);
-
-  if (result && Array.isArray(result.data) && result.data.length > 0) {
-    const list = result.data.map(normalizeStation);
-    return {
-      success: true,
-      data: list,
-      total: result.total ?? list.length,
-      page: result.page ?? 1,
-      pages: result.pages ?? 1,
-      count: list.length,
-      isLiveDb: true,
-      source: "xampp_mysql",
-    };
-  }
-
-  // Offline / fallback mode
-  let filteredFallback = fallbackStations as Station[];
-  if (params?.city && params.city.toLowerCase() !== "all" && params.city.toLowerCase() !== "all india") {
-    filteredFallback = filteredFallback.filter((s) =>
-      s.city.toLowerCase().includes(params.city!.toLowerCase())
-    );
-  }
-
-  return {
-    success: false,
-    data: filteredFallback,
-    total: fallbackStations.length,
-    page: 1,
-    pages: 1,
-    count: filteredFallback.length,
-    isLiveDb: false,
-    source: "local_fallback",
   };
 }
 
 /**
- * Search stations by query string (GET /api/v1/stations/search)
+ * GET /stations/search?q&city&limit
  */
-export async function searchStations(q: string, city?: string, limit = 50): Promise<Station[]> {
-  const query = `q=${encodeURIComponent(q)}${city ? `&city=${encodeURIComponent(city)}` : ""}&limit=${limit}`;
-  const result = await fetchFromApi<{ success: boolean; data: any[] }>(`/stations/search?${query}`);
-  if (result && Array.isArray(result.data)) {
-    return result.data.map(normalizeStation);
-  }
-  return [];
+export async function searchStations(
+  q: string,
+  city?: string,
+  limit = 50,
+  signal?: AbortSignal
+): Promise<Station[]> {
+  const query = buildQuery({
+    q,
+    city: city && city !== "All India" ? city : undefined,
+    limit,
+  });
+
+  const res = await apiFetch<{ success: boolean; data: any[] }>(`/stations/search${query}`, {
+    signal,
+  });
+
+  return Array.isArray(res.data) ? res.data.map(normalizeStation) : [];
 }
 
 /**
- * Fetch single station by ID (GET /api/v1/stations/{id})
+ * GET /stations/cities
  */
-export async function fetchStationById(id: string): Promise<Station | null> {
-  const result = await fetchFromApi<{ success: boolean; data: any }>(`/stations/${encodeURIComponent(id)}`);
-  if (result && result.data) {
-    return normalizeStation(result.data);
-  }
-  return null;
+export async function fetchCities(signal?: AbortSignal): Promise<string[]> {
+  const res = await apiFetch<{ success: boolean; data: string[] }>("/stations/cities", { signal });
+  return Array.isArray(res.data) ? res.data.map(String) : [];
 }
 
 /**
- * Check health status of API (GET /api/v1/health)
+ * GET /stations/{id}
  */
-export async function checkApiHealth(): Promise<HealthResponse | null> {
-  return await fetchFromApi<HealthResponse>("/health", undefined, 1500);
+export async function fetchStationById(id: string, signal?: AbortSignal): Promise<Station> {
+  const res = await apiFetch<{ success: boolean; data: any }>(
+    `/stations/${encodeURIComponent(id)}`,
+    { signal }
+  );
+  if (!res?.data) {
+    throw new ApiError("Station not found", { status: 404 });
+  }
+  return normalizeStation(res.data);
+}
+
+/**
+ * GET /stations/{id}/reviews
+ */
+export async function fetchStationReviews(
+  stationId: string,
+  signal?: AbortSignal
+): Promise<ReviewItem[]> {
+  const res = await apiFetch<{ success: boolean; data: any[] }>(
+    `/stations/${encodeURIComponent(stationId)}/reviews`,
+    { signal }
+  );
+  return Array.isArray(res.data) ? res.data.map(normalizeReview) : [];
+}
+
+/**
+ * POST /stations/{id}/reviews
+ */
+export async function postStationReview(
+  stationId: string,
+  review: CreateReviewInput,
+  signal?: AbortSignal
+): Promise<ReviewItem> {
+  const res = await apiFetch<{ success: boolean; data: any }>(
+    `/stations/${encodeURIComponent(stationId)}/reviews`,
+    {
+      method: "POST",
+      body: {
+        userName: review.userName?.trim() || "EV Driver",
+        rating: review.rating,
+        comment: review.comment?.trim() || "",
+        plugCondition: review.plugCondition,
+      },
+      signal,
+    }
+  );
+  return normalizeReview(res.data);
 }
 
 export const api = {
-  BASE_URL,
-  nearby,
-  bounds,
+  BASE_URL: API_BASE_URL,
+  health: checkApiHealth,
+  checkApiHealth,
   stations: fetchStations,
   getStations: fetchStations,
   fetchStations,
+  nearby,
   fetchNearbyStations,
+  bounds,
   fetchStationsInBounds,
+  search: searchStations,
   searchStations,
+  cities: fetchCities,
+  fetchCities,
+  station: fetchStationById,
   fetchStationById,
-  checkApiHealth,
+  getReviews: fetchStationReviews,
+  fetchStationReviews,
+  postReview: postStationReview,
+  postStationReview,
 };
 
 export const stationsApi = api;

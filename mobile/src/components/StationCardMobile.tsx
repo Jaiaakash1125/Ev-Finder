@@ -1,4 +1,4 @@
-import React from "react";
+import React, { memo } from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { Zap, MapPin, Navigation } from "lucide-react-native";
 import { Station } from "../types";
@@ -6,18 +6,44 @@ import { darkColors, lightColors, radius, spacing } from "../theme/theme";
 
 interface StationCardMobileProps {
   station: Station;
-  onPress: () => void;
-  onNavigate: () => void;
+  onPress: (station: Station) => void;
+  onNavigate: (station: Station) => void;
+  showDistance?: boolean;
   isDark?: boolean;
 }
 
-export const StationCardMobile: React.FC<StationCardMobileProps> = ({
+const STATUS_LABEL: Record<Station["status"], string> = {
+  available: "Available",
+  limited: "Limited",
+  busy: "Busy",
+  offline: "Offline",
+};
+
+const StationCardMobileComponent: React.FC<StationCardMobileProps> = ({
   station,
   onPress,
   onNavigate,
+  showDistance = false,
   isDark = true,
 }) => {
   const colors = isDark ? darkColors : lightColors;
+
+  const statusColor =
+    station.status === "available"
+      ? colors.success
+      : station.status === "offline"
+        ? colors.destructive
+        : colors.warning;
+
+  const statusBg =
+    station.status === "available"
+      ? colors.successBg
+      : station.status === "offline"
+        ? colors.destructiveBg
+        : colors.warningBg;
+
+  const hasDistance =
+    showDistance && typeof station.distanceKm === "number" && station.distanceKm >= 0;
 
   return (
     <TouchableOpacity
@@ -28,10 +54,10 @@ export const StationCardMobile: React.FC<StationCardMobileProps> = ({
           borderColor: colors.border,
         },
       ]}
-      onPress={onPress}
+      onPress={() => onPress(station)}
       activeOpacity={0.85}
     >
-      {/* Network Badge */}
+      {/* Top Row: Network Badge + Status / Distance */}
       <View style={styles.topRow}>
         <View
           style={[
@@ -47,7 +73,23 @@ export const StationCardMobile: React.FC<StationCardMobileProps> = ({
             {station.network}
           </Text>
         </View>
-        <Text style={[styles.cityText, { color: colors.frost }]}>📍 {station.city}</Text>
+
+        <View style={styles.topRightBadges}>
+          {hasDistance ? (
+            <View style={[styles.distancePill, { backgroundColor: colors.backgroundInput, borderColor: colors.border }]}>
+              <Text style={[styles.distanceText, { color: colors.primary }]}>
+                {station.distanceKm!.toFixed(1)} km
+              </Text>
+            </View>
+          ) : null}
+
+          <View style={[styles.statusPill, { backgroundColor: statusBg }]}>
+            <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+            <Text style={[styles.statusText, { color: statusColor }]}>
+              {STATUS_LABEL[station.status]}
+            </Text>
+          </View>
+        </View>
       </View>
 
       {/* Station Name */}
@@ -55,15 +97,18 @@ export const StationCardMobile: React.FC<StationCardMobileProps> = ({
         {station.name}
       </Text>
 
-      {/* Address */}
+      {/* Address & City */}
       <View style={styles.addressRow}>
         <MapPin size={13} color={colors.foregroundSubtle} />
         <Text style={[styles.addressText, { color: colors.foregroundMuted }]} numberOfLines={1}>
-          {station.address}
+          {station.address || station.city}
+          {station.city && station.address && !station.address.toLowerCase().includes(station.city.toLowerCase())
+            ? `, ${station.city}`
+            : ""}
         </Text>
       </View>
 
-      {/* Speed & Ports Metrics */}
+      {/* Speed, Ports & Price Metrics */}
       <View
         style={[
           styles.statsRow,
@@ -74,16 +119,27 @@ export const StationCardMobile: React.FC<StationCardMobileProps> = ({
         ]}
       >
         <View style={styles.statItem}>
-          <Text style={[styles.statLabel, { color: colors.foregroundSubtle }]}>MAX SPEED</Text>
-          <Text style={[styles.statValue, { color: colors.foreground }]}>⚡ {station.maxPowerKw} kW</Text>
+          <Text style={[styles.statLabel, { color: colors.foregroundSubtle }]}>MAX POWER</Text>
+          <Text style={[styles.statValue, { color: colors.foreground }]}>
+            {station.maxPowerKw} kW
+          </Text>
         </View>
 
         <View style={[styles.statDivider, { backgroundColor: colors.borderSubtle }]} />
 
         <View style={styles.statItem}>
-          <Text style={[styles.statLabel, { color: colors.foregroundSubtle }]}>CHARGING BAYS</Text>
+          <Text style={[styles.statLabel, { color: colors.foregroundSubtle }]}>PORTS</Text>
           <Text style={[styles.statValue, { color: colors.accent }]}>
-            🔌 {station.totalPorts} Ports
+            {station.freePorts}/{station.totalPorts} free
+          </Text>
+        </View>
+
+        <View style={[styles.statDivider, { backgroundColor: colors.borderSubtle }]} />
+
+        <View style={styles.statItem}>
+          <Text style={[styles.statLabel, { color: colors.foregroundSubtle }]}>TARIFF</Text>
+          <Text style={[styles.statValue, { color: colors.foreground }]}>
+            ₹{station.pricePerKwh}/kWh
           </Text>
         </View>
       </View>
@@ -91,9 +147,9 @@ export const StationCardMobile: React.FC<StationCardMobileProps> = ({
       {/* Connectors & Directions Button */}
       <View style={styles.footerRow}>
         <View style={styles.connectorTags}>
-          {station.connectors.slice(0, 2).map((conn, idx) => (
+          {station.connectors.slice(0, 3).map((conn, idx) => (
             <View
-              key={idx}
+              key={`${conn}-${idx}`}
               style={[
                 styles.connectorBadge,
                 {
@@ -109,16 +165,21 @@ export const StationCardMobile: React.FC<StationCardMobileProps> = ({
 
         <TouchableOpacity
           style={[styles.navButton, { backgroundColor: colors.primary }]}
-          onPress={onNavigate}
+          onPress={(e) => {
+            e.stopPropagation();
+            onNavigate(station);
+          }}
           activeOpacity={0.8}
         >
           <Navigation size={13} color="#020617" />
-          <Text style={styles.navButtonText}>Directions ↗</Text>
+          <Text style={styles.navButtonText}>Directions</Text>
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
   );
 };
+
+export const StationCardMobile = memo(StationCardMobileComponent);
 
 const styles = StyleSheet.create({
   card: {
@@ -132,6 +193,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 8,
     marginBottom: spacing.xs,
   },
   networkBadge: {
@@ -142,16 +204,44 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: radius.full,
-    maxWidth: "70%",
+    flexShrink: 1,
   },
   networkText: {
     fontSize: 10,
     fontWeight: "800",
     textTransform: "uppercase",
   },
-  cityText: {
-    fontSize: 11,
-    fontWeight: "600",
+  topRightBadges: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  distancePill: {
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: radius.full,
+    borderWidth: 1,
+  },
+  distanceText: {
+    fontSize: 10,
+    fontWeight: "800",
+  },
+  statusPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.full,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  statusText: {
+    fontSize: 10,
+    fontWeight: "800",
   },
   name: {
     fontSize: 16,
@@ -174,16 +264,17 @@ const styles = StyleSheet.create({
     justifyContent: "space-around",
     borderRadius: radius.md,
     paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.sm,
     borderWidth: 1,
     marginBottom: spacing.sm,
   },
   statItem: {
     alignItems: "center",
+    flex: 1,
   },
   statDivider: {
     width: 1,
-    height: 20,
+    height: 22,
   },
   statLabel: {
     fontSize: 9,
@@ -191,7 +282,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   statValue: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "800",
     marginTop: 2,
   },
@@ -199,11 +290,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 8,
     marginTop: spacing.xs,
   },
   connectorTags: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 6,
+    flex: 1,
   },
   connectorBadge: {
     paddingHorizontal: 8,
@@ -220,7 +314,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 4,
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 7,
     borderRadius: radius.full,
   },
   navButtonText: {

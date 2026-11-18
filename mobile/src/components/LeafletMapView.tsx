@@ -1,40 +1,103 @@
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useMemo } from "react";
 import { StyleSheet, View, ActivityIndicator, Platform } from "react-native";
 import { WebView } from "react-native-webview";
 import { Station } from "../types";
 import { darkColors, lightColors } from "../theme/theme";
+import { BENGALURU_CENTER } from "../constants/cities";
+
+export interface MapCenterTarget {
+  lat: number;
+  lng: number;
+  zoom: number;
+  key: number;
+}
+
+export interface MapBounds {
+  min_lat: number;
+  min_lng: number;
+  max_lat: number;
+  max_lng: number;
+}
 
 interface LeafletMapViewProps {
   stations: Station[];
-  selectedCity: string;
+  center?: MapCenterTarget;
+  userLocation?: { lat: number; lng: number } | null;
   onSelectStation: (station: Station) => void;
-  onBoundsChange?: (bounds: { min_lat: number; min_lng: number; max_lat: number; max_lng: number }) => void;
+  onBoundsChange?: (bounds: MapBounds) => void;
   isDark?: boolean;
 }
 
-const CITY_COORDS: Record<string, { lat: number; lng: number; zoom: number }> = {
-  "All India": { lat: 20.5937, lng: 78.9629, zoom: 5 },
-  Bengaluru: { lat: 12.9716, lng: 77.5946, zoom: 12 },
-  "New Delhi": { lat: 28.6139, lng: 77.209, zoom: 12 },
-  Mumbai: { lat: 19.076, lng: 72.8777, zoom: 12 },
-  Hyderabad: { lat: 17.385, lng: 78.4867, zoom: 12 },
-  Chennai: { lat: 13.0827, lng: 80.2707, zoom: 12 },
-  Pune: { lat: 18.5204, lng: 73.8567, zoom: 12 },
-  Kolkata: { lat: 22.5726, lng: 88.3639, zoom: 12 },
-};
+const MAX_RENDERED_MARKERS = 500;
 
 export const LeafletMapView: React.FC<LeafletMapViewProps> = ({
   stations,
-  selectedCity,
+  center,
+  userLocation = null,
   onSelectStation,
   onBoundsChange,
   isDark = true,
 }) => {
   const webViewRef = useRef<WebView | null>(null);
   const iframeRef = useRef<any>(null);
+  const lastCenterKeyRef = useRef<number | null>(null);
+  const latestPropsRef = useRef({ stations, center, userLocation, isDark });
+  latestPropsRef.current = { stations, center, userLocation, isDark };
   const colors = isDark ? darkColors : lightColors;
 
-  // Web event listener for postMessage communication from iframe
+  const pushMapData = (forceFly: boolean) => {
+    const {
+      stations: curStations,
+      center: curCenter,
+      userLocation: curUserLoc,
+      isDark: curDark,
+    } = latestPropsRef.current;
+
+    const cappedStations = curStations.slice(0, MAX_RENDERED_MARKERS);
+    const shouldFly =
+      curCenter !== undefined &&
+      (forceFly || lastCenterKeyRef.current !== curCenter.key);
+
+    if (shouldFly && curCenter) {
+      lastCenterKeyRef.current = curCenter.key;
+    }
+
+    const latArg = shouldFly && curCenter ? curCenter.lat : null;
+    const lngArg = shouldFly && curCenter ? curCenter.lng : null;
+    const zoomArg = shouldFly && curCenter ? curCenter.zoom : null;
+
+    if (Platform.OS === "web") {
+      const iframe = iframeRef.current;
+      if (iframe?.contentWindow && (iframe.contentWindow as any).updateMapData) {
+        (iframe.contentWindow as any).updateMapData(
+          cappedStations,
+          latArg,
+          lngArg,
+          zoomArg,
+          curDark,
+          curUserLoc
+        );
+      }
+      return;
+    }
+
+    if (!webViewRef.current) return;
+    const script = `
+      if (window.updateMapData) {
+        window.updateMapData(
+          ${JSON.stringify(cappedStations)},
+          ${latArg === null ? "null" : latArg},
+          ${lngArg === null ? "null" : lngArg},
+          ${zoomArg === null ? "null" : zoomArg},
+          ${curDark},
+          ${JSON.stringify(curUserLoc)}
+        );
+      }
+      true;
+    `;
+    webViewRef.current.injectJavaScript(script);
+  };
+
   useEffect(() => {
     if (Platform.OS !== "web") return;
     const handleWindowMessage = (event: MessageEvent) => {
@@ -53,30 +116,12 @@ export const LeafletMapView: React.FC<LeafletMapViewProps> = ({
     return () => window.removeEventListener("message", handleWindowMessage);
   }, [onSelectStation, onBoundsChange]);
 
-  // Update map markers, theme filter, and view when stations, city, or theme changes
   useEffect(() => {
-    const cityData = CITY_COORDS[selectedCity] || CITY_COORDS["All India"];
+    pushMapData(false);
+  }, [stations, center?.key, userLocation?.lat, userLocation?.lng, isDark]);
 
-    if (Platform.OS === "web") {
-      const iframe = iframeRef.current;
-      if (iframe?.contentWindow && (iframe.contentWindow as any).updateMapData) {
-        (iframe.contentWindow as any).updateMapData(stations, cityData.lat, cityData.lng, cityData.zoom, isDark);
-      }
-      return;
-    }
-
-    if (!webViewRef.current) return;
-    const script = `
-      if (window.updateMapData) {
-        window.updateMapData(${JSON.stringify(stations)}, ${cityData.lat}, ${cityData.lng}, ${cityData.zoom}, ${isDark});
-      }
-    `;
-    webViewRef.current.injectJavaScript(script);
-  }, [stations, selectedCity, isDark]);
-
-  const initialCity = CITY_COORDS[selectedCity] || CITY_COORDS["All India"];
-
-  const htmlContent = `
+  const htmlContent = useMemo(() => {
+    return `
 <!DOCTYPE html>
 <html>
 <head>
@@ -87,17 +132,16 @@ export const LeafletMapView: React.FC<LeafletMapViewProps> = ({
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body, #map { width: 100%; height: 100%; background: ${isDark ? "#080c14" : "#f0f9ff"}; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    
-    /* Dark / Light Tile Filters */
+    html, body, #map { width: 100%; height: 100%; background: #080c14; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body.light-tiles, body.light-tiles #map { background: #f0f9ff; }
+
     .dark-tiles .leaflet-tile {
       filter: brightness(0.85) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.7);
     }
     .light-tiles .leaflet-tile {
       filter: contrast(1.05) saturate(1.1);
     }
-    
-    /* Custom Glowing EV Pins */
+
     .ev-custom-pin {
       background: transparent;
       border: none;
@@ -115,10 +159,6 @@ export const LeafletMapView: React.FC<LeafletMapViewProps> = ({
       border: 2px solid #ffffff;
       box-shadow: 0 0 12px rgba(0, 242, 254, 0.8), 0 3px 6px rgba(0,0,0,0.5);
       cursor: pointer;
-      transition: transform 0.15s ease;
-    }
-    .pin-inner:active {
-      transform: scale(1.25);
     }
     .pin-available {
       background: linear-gradient(135deg, #00f2fe 0%, #38bdf8 100%);
@@ -127,8 +167,25 @@ export const LeafletMapView: React.FC<LeafletMapViewProps> = ({
       background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
       box-shadow: 0 0 10px rgba(245, 158, 11, 0.8);
     }
+    .pin-offline {
+      background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
+      color: #ffffff;
+      box-shadow: 0 0 10px rgba(239, 68, 68, 0.7);
+    }
 
-    /* Cluster Badges */
+    .user-loc-pin {
+      background: transparent;
+      border: none;
+    }
+    .user-loc-dot {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #38bdf8;
+      border: 3px solid #ffffff;
+      box-shadow: 0 0 0 6px rgba(56, 189, 248, 0.35);
+    }
+
     .dark-tiles .marker-cluster-small, .dark-tiles .marker-cluster-medium, .dark-tiles .marker-cluster-large {
       background-color: rgba(56, 189, 248, 0.25) !important;
     }
@@ -153,15 +210,15 @@ export const LeafletMapView: React.FC<LeafletMapViewProps> = ({
     }
   </style>
 </head>
-<body class="${isDark ? "dark-tiles" : "light-tiles"}">
+<body class="dark-tiles">
   <div id="map"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
   <script>
     var map = L.map('map', {
-      center: [${initialCity.lat}, ${initialCity.lng}],
-      zoom: ${initialCity.zoom},
+      center: [${BENGALURU_CENTER.lat}, ${BENGALURU_CENTER.lng}],
+      zoom: ${BENGALURU_CENTER.zoom},
       zoomControl: false,
       attributionControl: false
     });
@@ -173,15 +230,63 @@ export const LeafletMapView: React.FC<LeafletMapViewProps> = ({
 
     var clusterGroup = L.markerClusterGroup({
       chunkedLoading: true,
-      maxClusterRadius: 40,
+      chunkInterval: 100,
+      chunkDelay: 20,
+      maxClusterRadius: 45,
       showCoverageOnHover: false
     });
     map.addLayer(clusterGroup);
 
+    var iconAvailable = L.divIcon({
+      className: 'ev-custom-pin',
+      html: '<div class="pin-inner pin-available">⚡</div>',
+      iconSize: [28, 28],
+      iconAnchor: [14, 14]
+    });
+
+    var iconBusy = L.divIcon({
+      className: 'ev-custom-pin',
+      html: '<div class="pin-inner pin-busy">⚡</div>',
+      iconSize: [28, 28],
+      iconAnchor: [14, 14]
+    });
+
+    var iconOffline = L.divIcon({
+      className: 'ev-custom-pin',
+      html: '<div class="pin-inner pin-offline">⚡</div>',
+      iconSize: [28, 28],
+      iconAnchor: [14, 14]
+    });
+
+    var userLocIcon = L.divIcon({
+      className: 'user-loc-pin',
+      html: '<div class="user-loc-dot"></div>',
+      iconSize: [16, 16],
+      iconAnchor: [8, 8]
+    });
+
+    var userMarker = null;
+    var suppressNextMoveEnd = false;
+    var suppressTimer = null;
+
+    function postToApp(obj) {
+      var msg = JSON.stringify(obj);
+      if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+        window.ReactNativeWebView.postMessage(msg);
+      }
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage(msg, '*');
+      }
+    }
+
     map.on('moveend', function() {
+      if (suppressNextMoveEnd) {
+        suppressNextMoveEnd = false;
+        return;
+      }
       try {
         var b = map.getBounds();
-        var msg = JSON.stringify({
+        postToApp({
           type: 'BOUNDS_CHANGE',
           bounds: {
             min_lat: b.getSouth(),
@@ -190,71 +295,66 @@ export const LeafletMapView: React.FC<LeafletMapViewProps> = ({
             max_lng: b.getEast()
           }
         });
-        if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
-          window.ReactNativeWebView.postMessage(msg);
-        }
-        if (window.parent && window.parent !== window) {
-          window.parent.postMessage(msg, '*');
-        }
       } catch (e) {}
     });
 
     var currentStationsMap = {};
 
-    window.updateMapData = function(stations, lat, lng, zoom, isDarkMode) {
+    window.updateMapData = function(stations, lat, lng, zoom, isDarkMode, userLoc) {
       document.body.className = isDarkMode ? 'dark-tiles' : 'light-tiles';
+
+      if (userLoc && typeof userLoc.lat === 'number' && typeof userLoc.lng === 'number') {
+        if (!userMarker) {
+          userMarker = L.marker([userLoc.lat, userLoc.lng], { icon: userLocIcon, zIndexOffset: 1000 }).addTo(map);
+        } else {
+          userMarker.setLatLng([userLoc.lat, userLoc.lng]);
+        }
+      }
+
+      if (lat !== null && lng !== null && zoom !== null && typeof lat === 'number' && typeof lng === 'number') {
+        suppressNextMoveEnd = true;
+        if (suppressTimer) clearTimeout(suppressTimer);
+        suppressTimer = setTimeout(function() { suppressNextMoveEnd = false; }, 1600);
+        map.flyTo([lat, lng], zoom, { duration: 0.8 });
+      }
+
       clusterGroup.clearLayers();
       currentStationsMap = {};
 
-      if (lat && lng && zoom) {
-        map.flyTo([lat, lng], zoom, { duration: 1.2 });
-      }
-
       var markers = [];
-      for (var i = 0; i < stations.length; i++) {
-        var s = stations[i];
-        currentStationsMap[s.id] = s;
-
-        var isAvail = s.status === 'available';
-        var pinClass = isAvail ? 'pin-available' : 'pin-busy';
-
-        var customIcon = L.divIcon({
-          className: 'ev-custom-pin',
-          html: '<div class="pin-inner ' + pinClass + '">⚡</div>',
-          iconSize: [28, 28],
-          iconAnchor: [14, 14]
-        });
-
-        var marker = L.marker([s.lat, s.lng], { icon: customIcon });
-        marker.stationId = s.id;
-
-        marker.on('click', function(e) {
-          var clickedStation = currentStationsMap[e.target.stationId];
-          if (clickedStation) {
-            var msg = JSON.stringify({
-              type: 'SELECT_STATION',
-              station: clickedStation
-            });
-            if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
-              window.ReactNativeWebView.postMessage(msg);
-            }
-            if (window.parent && window.parent !== window) {
-              window.parent.postMessage(msg, '*');
-            }
+      if (Array.isArray(stations)) {
+        for (var i = 0; i < stations.length; i++) {
+          var s = stations[i];
+          if (!s || typeof s.lat !== 'number' || typeof s.lng !== 'number' || !s.lat || !s.lng) {
+            continue;
           }
-        });
+          currentStationsMap[s.id] = s;
 
-        markers.push(marker);
+          var pinIcon = s.status === 'available' ? iconAvailable : (s.status === 'offline' ? iconOffline : iconBusy);
+          var marker = L.marker([s.lat, s.lng], { icon: pinIcon });
+          marker.stationId = s.id;
+
+          marker.on('click', function(e) {
+            var clickedStation = currentStationsMap[e.target.stationId];
+            if (clickedStation) {
+              postToApp({
+                type: 'SELECT_STATION',
+                station: clickedStation
+              });
+            }
+          });
+
+          markers.push(marker);
+        }
       }
 
       clusterGroup.addLayers(markers);
     };
-
-    window.updateMapData(${JSON.stringify(stations)}, ${initialCity.lat}, ${initialCity.lng}, ${initialCity.zoom}, ${isDark});
   </script>
 </body>
 </html>
-  `;
+    `;
+  }, []);
 
   if (Platform.OS === "web") {
     return (
@@ -264,13 +364,7 @@ export const LeafletMapView: React.FC<LeafletMapViewProps> = ({
           srcDoc={htmlContent}
           style={{ width: "100%", height: "100%", border: "none" }}
           title="Leaflet Map"
-          onLoad={() => {
-            const cityData = CITY_COORDS[selectedCity] || CITY_COORDS["All India"];
-            const iframe = iframeRef.current;
-            if (iframe?.contentWindow && (iframe.contentWindow as any).updateMapData) {
-              (iframe.contentWindow as any).updateMapData(stations, cityData.lat, cityData.lng, cityData.zoom, isDark);
-            }
-          }}
+          onLoad={() => pushMapData(true)}
         />
       </View>
     );
@@ -288,6 +382,7 @@ export const LeafletMapView: React.FC<LeafletMapViewProps> = ({
         javaScriptEnabled
         domStorageEnabled
         scrollEnabled={false}
+        onLoadEnd={() => pushMapData(true)}
         onMessage={(event: any) => {
           try {
             const data = JSON.parse(event.nativeEvent.data);
