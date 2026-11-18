@@ -562,7 +562,7 @@ export const StationsScreen: React.FC = () => {
                   Showing all {stations.length.toLocaleString()} stations
                 </Text>
               </View>
-            ) : null
+            ) : undefined
           }
         />
       )}
