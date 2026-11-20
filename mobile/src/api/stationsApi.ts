@@ -1,4 +1,5 @@
 import { ReviewItem, Station } from "../types";
+import { cleanCityList, isValidCityName } from "../utils/cityUtils";
 import { API_BASE_URL, API_TIMEOUT_MS } from "./config";
 
 export { API_BASE_URL };
@@ -149,13 +150,21 @@ export function normalizeStation(raw: any): Station {
       ? Number(rawDistance)
       : undefined;
 
+  const rawCity = String(raw?.city || "").trim();
+  const safeCity = isValidCityName(rawCity) ? rawCity : String(raw?.state || "India");
+
+  let safeAddress = String(raw?.address || "").trim();
+  if (safeAddress.includes("?")) {
+    safeAddress = safeAddress.replace(/\?+/g, "").replace(/\s+,/g, ",").trim();
+  }
+
   return {
     id: String(raw?.id ?? ""),
     name: String(raw?.name || "EV Charging Station"),
     network: String(raw?.network || "Public Charger"),
-    city: String(raw?.city || ""),
+    city: safeCity,
     state: String(raw?.state || "India"),
-    address: String(raw?.address || ""),
+    address: safeAddress || safeCity,
     pincode: String(raw?.pincode || ""),
     lat: Number(raw?.lat ?? raw?.latitude) || 20.5937,
     lng: Number(raw?.lng ?? raw?.longitude) || 78.9629,
@@ -458,7 +467,8 @@ export async function searchStations(
  */
 export async function fetchCities(signal?: AbortSignal): Promise<string[]> {
   const res = await apiFetch<{ success: boolean; data: string[] }>("/stations/cities", { signal });
-  return Array.isArray(res.data) ? res.data.map(String) : [];
+  const raw = Array.isArray(res.data) ? res.data.map(String) : [];
+  return cleanCityList(raw);
 }
 
 /**

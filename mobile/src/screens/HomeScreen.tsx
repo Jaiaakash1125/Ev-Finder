@@ -35,7 +35,7 @@ import {
   getErrorMessage,
   isAbortError,
 } from "../api/stationsApi";
-import { BENGALURU_CENTER, TOP_CITIES } from "../constants/cities";
+import { BENGALURU_CENTER, TOP_CITIES, cityCoordinates } from "../constants/cities";
 import { colors, radius, spacing } from "../theme/theme";
 import { LoadingState } from "../components/LoadingState";
 import { ErrorState } from "../components/ErrorState";
@@ -203,11 +203,33 @@ export const HomeScreen: React.FC = () => {
 
   const handleSubmitSearch = () => {
     const trimmed = searchQuery.trim();
-    navigation.navigate("Stations", {
-      query: trimmed,
-      city: "All India",
-      connector: undefined,
-    });
+    if (!trimmed) {
+      navigation.navigate("Stations", {
+        city: "All India",
+        query: "",
+        connector: undefined,
+      });
+      return;
+    }
+
+    const lower = trimmed.toLowerCase();
+    const matchedCity =
+      TOP_CITIES.find((c) => c.toLowerCase() === lower) ||
+      Object.keys(cityCoordinates).find((c) => c.toLowerCase() === lower);
+
+    if (matchedCity) {
+      navigation.navigate("Stations", {
+        city: matchedCity,
+        query: "",
+        connector: undefined,
+      });
+    } else {
+      navigation.navigate("Stations", {
+        query: trimmed,
+        city: "All India",
+        connector: undefined,
+      });
+    }
   };
 
   const handleSelectCity = (city: string) => {
@@ -286,7 +308,7 @@ export const HomeScreen: React.FC = () => {
                 style={styles.searchInput}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
-                placeholder="Search city, area, or network..."
+                placeholder="Search by city name..."
                 placeholderTextColor={colors.foregroundSubtle}
                 returnKeyType="search"
                 onSubmitEditing={handleSubmitSearch}

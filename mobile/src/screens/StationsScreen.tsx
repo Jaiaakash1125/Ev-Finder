@@ -404,7 +404,7 @@ export const StationsScreen: React.FC = () => {
               style={styles.searchInput}
               value={searchInput}
               onChangeText={setSearchInput}
-              placeholder="Search name, address, network..."
+              placeholder="Search by city name..."
               placeholderTextColor={colors.foregroundSubtle}
               returnKeyType="search"
               autoCorrect={false}

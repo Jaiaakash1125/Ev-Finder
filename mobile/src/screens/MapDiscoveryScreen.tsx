@@ -278,7 +278,11 @@ export const MapDiscoveryScreen: React.FC = () => {
           .filter((s) => matchesClientFilters(s, filtersRef.current))
           .slice(0, MAX_MARKERS);
         setStations(filtered);
-        if (filtered.length > 0) {
+        const lower = trimmed.toLowerCase();
+        const coordKey = Object.keys(cityCoordinates).find((k) => k.toLowerCase() === lower);
+        if (coordKey && cityCoordinates[coordKey]) {
+          flyTo(cityCoordinates[coordKey].lat, cityCoordinates[coordKey].lng, cityCoordinates[coordKey].zoom || 12);
+        } else if (filtered.length > 0) {
           flyTo(filtered[0].lat, filtered[0].lng, 12);
         }
       } catch (err) {

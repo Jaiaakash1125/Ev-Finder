@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { X, Search, MapPin, Check } from "lucide-react-native";
 import { colors, radius, spacing } from "../theme/theme";
+import { cleanCityList } from "../utils/cityUtils";
 
 interface CityPickerModalProps {
   visible: boolean;
@@ -52,12 +53,16 @@ export const CityPickerModal: React.FC<CityPickerModalProps> = ({
 }) => {
   const [filterText, setFilterText] = useState("");
 
+  const cleanedCities = useMemo(() => {
+    return cleanCityList(cities);
+  }, [cities]);
+
   const filteredCities = useMemo(() => {
     const q = filterText.trim().toLowerCase();
-    const list = ["All India", ...cities];
+    const list = ["All India", ...cleanedCities];
     if (!q) return list;
     return list.filter((c) => c.toLowerCase().includes(q));
-  }, [cities, filterText]);
+  }, [cleanedCities, filterText]);
 
   const handlePick = useCallback(
     (city: string) => {
@@ -97,7 +102,7 @@ export const CityPickerModal: React.FC<CityPickerModalProps> = ({
               style={styles.searchInput}
               value={filterText}
               onChangeText={setFilterText}
-              placeholder="Search cities..."
+              placeholder="Search by city name..."
               placeholderTextColor={colors.foregroundSubtle}
               autoCorrect={false}
             />
@@ -131,7 +136,7 @@ export const CityPickerModal: React.FC<CityPickerModalProps> = ({
               renderItem={renderCityItem}
               ListEmptyComponent={
                 <View style={styles.centerBox}>
-                  <Text style={styles.statusText}>No matching cities</Text>
+                  <Text style={styles.statusText}>No matching city found</Text>
                 </View>
               }
             />

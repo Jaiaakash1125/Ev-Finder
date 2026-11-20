@@ -84,7 +84,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
         <Search size={18} color={colors.foregroundMuted} style={styles.searchIcon} />
         <TextInput
           style={[styles.searchInput, { color: colors.foreground }]}
-          placeholder={`Search ${currentCity} or brand...`}
+          placeholder="Search by city name..."
           placeholderTextColor={colors.foregroundSubtle}
           value={searchQuery}
           onChangeText={onSearchChange}
