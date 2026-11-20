@@ -1,4 +1,4 @@
-export const DEFAULT_API_URL = "http://192.168.1.10/api/v1";
+export const DEFAULT_API_URL = "http://10.39.111.12/api/v1";
 
 const rawUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
 
