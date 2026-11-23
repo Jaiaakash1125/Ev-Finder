@@ -1,15 +1,11 @@
-import React, { useState, useEffect, useCallback, useMemo, memo } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
-  TextInput,
   StyleSheet,
   Share,
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
   RefreshControl,
 } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -21,18 +17,12 @@ import {
   Clock,
   Star,
   Info,
-  MessageSquarePlus,
-  CheckCircle2,
-  AlertCircle,
-  XCircle,
 } from "lucide-react-native";
 
-import type { ReviewItem, Station } from "../types";
+import type { Station } from "../types";
 import type { RootStackParamList } from "../navigation/types";
 import {
   fetchStationById,
-  fetchStationReviews,
-  postStationReview,
   getErrorMessage,
   isAbortError,
 } from "../api/stationsApi";
@@ -45,78 +35,12 @@ import { EmptyState } from "../components/EmptyState";
 
 type Props = NativeStackScreenProps<RootStackParamList, "StationDetail">;
 
-type PlugCondition = ReviewItem["plugCondition"];
-
-const PLUG_CONDITIONS: { id: PlugCondition; label: string }[] = [
-  { id: "working_perfect", label: "Working perfectly" },
-  { id: "slow_charge", label: "Slow charge" },
-  { id: "broken_connector", label: "Broken connector" },
-];
-
 const STATUS_LABEL: Record<Station["status"], string> = {
   available: "Available",
   limited: "Limited",
   busy: "Busy",
   offline: "Offline",
 };
-
-function formatDate(raw: string): string {
-  if (!raw) return "";
-  const parsed = new Date(raw);
-  if (Number.isNaN(parsed.getTime())) return raw;
-  return parsed.toLocaleDateString("en-IN", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
-
-const ReviewCard = memo(({ review }: { review: ReviewItem }) => {
-  const condColor =
-    review.plugCondition === "working_perfect"
-      ? colors.success
-      : review.plugCondition === "slow_charge"
-        ? colors.warning
-        : colors.destructive;
-
-  const condLabel =
-    review.plugCondition === "working_perfect"
-      ? "Working perfectly"
-      : review.plugCondition === "slow_charge"
-        ? "Slow charge"
-        : "Broken connector";
-
-  const CondIcon =
-    review.plugCondition === "working_perfect"
-      ? CheckCircle2
-      : review.plugCondition === "slow_charge"
-        ? AlertCircle
-        : XCircle;
-
-  return (
-    <View style={styles.reviewItem}>
-      <View style={styles.reviewItemHeader}>
-        <Text style={styles.reviewerName}>{review.userName}</Text>
-        <View style={styles.reviewStars}>
-          <Star size={13} color={colors.warning} fill={colors.warning} />
-          <Text style={styles.reviewRatingNum}>{review.rating}.0</Text>
-        </View>
-      </View>
-
-      <View style={styles.reviewMetaRow}>
-        <View style={styles.plugBadge}>
-          <CondIcon size={12} color={condColor} />
-          <Text style={[styles.plugBadgeText, { color: condColor }]}>{condLabel}</Text>
-        </View>
-        {review.createdAt ? (
-          <Text style={styles.reviewDate}>{formatDate(review.createdAt)}</Text>
-        ) : null}
-      </View>
-
-      {review.comment ? <Text style={styles.reviewComment}>{review.comment}</Text> : null}
-    </View>
-  );
-});
 
 export const StationDetailScreen: React.FC<Props> = ({ route, navigation }) => {
   const { stationId, station: initialStation } = route.params;
@@ -126,20 +50,6 @@ export const StationDetailScreen: React.FC<Props> = ({ route, navigation }) => {
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [reviews, setReviews] = useState<ReviewItem[]>([]);
-  const [reviewsLoading, setReviewsLoading] = useState<boolean>(true);
-  const [reviewsError, setReviewsError] = useState<string | null>(null);
-
-  // Add review form state
-  const [showReviewForm, setShowReviewForm] = useState<boolean>(false);
-  const [userName, setUserName] = useState<string>("");
-  const [rating, setRating] = useState<number>(5);
-  const [comment, setComment] = useState<string>("");
-  const [plugCondition, setPlugCondition] = useState<PlugCondition>("working_perfect");
-  const [submitting, setSubmitting] = useState<boolean>(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const [submitSuccess, setSubmitSuccess] = useState<boolean>(false);
-
   const loadData = useCallback(
     async (isRefresh = false, signal?: AbortSignal) => {
       if (isRefresh) {
@@ -148,38 +58,23 @@ export const StationDetailScreen: React.FC<Props> = ({ route, navigation }) => {
         setLoading(true);
       }
       setError(null);
-      setReviewsLoading(true);
-      setReviewsError(null);
 
-      const stationTask = fetchStationById(stationId, signal)
-        .then((data) => {
-          setStation(data);
-          navigation.setOptions({ title: data.name });
-        })
-        .catch((err) => {
-          if (!isAbortError(err)) {
-            setError(getErrorMessage(err));
-          }
-        });
-
-      const reviewsTask = fetchStationReviews(stationId, signal)
-        .then((list) => {
-          setReviews(list);
-        })
-        .catch((err) => {
-          if (!isAbortError(err)) {
-            setReviewsError(getErrorMessage(err));
-          }
-        });
-
-      await Promise.all([stationTask, reviewsTask]);
-      if (!signal?.aborted) {
-        setLoading(false);
-        setRefreshing(false);
-        setReviewsLoading(false);
+      try {
+        const data = await fetchStationById(stationId, signal);
+        setStation(data);
+        navigation.setOptions({ title: data.name });
+      } catch (err) {
+        if (!isAbortError(err)) {
+          setError(getErrorMessage(err));
+        }
+      } finally {
+        if (!signal?.aborted) {
+          setLoading(false);
+          setRefreshing(false);
+        }
       }
     },
-    [stationId, navigation]
+    [stationId, navigation, station]
   );
 
   useEffect(() => {
@@ -210,40 +105,6 @@ export const StationDetailScreen: React.FC<Props> = ({ route, navigation }) => {
       });
     } catch {
       // User dismissed share sheet
-    }
-  };
-
-  const handleSubmitReview = async () => {
-    if (rating < 1 || rating > 5) {
-      setSubmitError("Please select a star rating from 1 to 5.");
-      return;
-    }
-
-    setSubmitting(true);
-    setSubmitError(null);
-    setSubmitSuccess(false);
-
-    try {
-      await postStationReview(stationId, {
-        userName: userName.trim() || "EV Driver",
-        rating,
-        comment: comment.trim(),
-        plugCondition,
-      });
-
-      setUserName("");
-      setRating(5);
-      setComment("");
-      setPlugCondition("working_perfect");
-      setShowReviewForm(false);
-      setSubmitSuccess(true);
-
-      // Refresh both reviews list and updated station rating/reviews count
-      await loadData(true);
-    } catch (err) {
-      setSubmitError(getErrorMessage(err, "Failed to submit review."));
-    } finally {
-      setSubmitting(false);
     }
   };
 
@@ -280,10 +141,7 @@ export const StationDetailScreen: React.FC<Props> = ({ route, navigation }) => {
         : colors.warningBg;
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
+    <View style={styles.flex}>
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
@@ -442,158 +300,8 @@ export const StationDetailScreen: React.FC<Props> = ({ route, navigation }) => {
             />
           </View>
         </View>
-
-        {/* Reviews Section */}
-        <View style={styles.sectionCard}>
-          <View style={styles.reviewsHeader}>
-            <View>
-              <Text style={styles.sectionTitle}>
-                Driver Reviews ({reviews.length})
-              </Text>
-              <Text style={styles.reviewsSubtitle}>
-                Community feedback saved to the server
-              </Text>
-            </View>
-
-            <TouchableOpacity
-              style={styles.addReviewToggle}
-              onPress={() => {
-                setShowReviewForm((prev) => !prev);
-                setSubmitError(null);
-                setSubmitSuccess(false);
-              }}
-              activeOpacity={0.8}
-            >
-              <MessageSquarePlus size={15} color={colors.accentForeground} />
-              <Text style={styles.addReviewToggleText}>
-                {showReviewForm ? "Cancel" : "Add review"}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {submitSuccess ? (
-            <View style={styles.successBanner}>
-              <CheckCircle2 size={15} color={colors.success} />
-              <Text style={styles.successBannerText}>
-                Review submitted! Thank you for helping fellow EV drivers.
-              </Text>
-            </View>
-          ) : null}
-
-          {/* Add Review Form */}
-          {showReviewForm ? (
-            <View style={styles.reviewForm}>
-              <Text style={styles.formLabel}>Your Name (optional)</Text>
-              <TextInput
-                style={styles.textInput}
-                value={userName}
-                onChangeText={setUserName}
-                placeholder="EV Driver"
-                placeholderTextColor={colors.foregroundSubtle}
-                maxLength={120}
-              />
-
-              <Text style={styles.formLabel}>Rating</Text>
-              <View style={styles.starsRow}>
-                {[1, 2, 3, 4, 5].map((num) => (
-                  <TouchableOpacity
-                    key={num}
-                    onPress={() => setRating(num)}
-                    style={styles.starBtn}
-                    activeOpacity={0.7}
-                  >
-                    <Star
-                      size={28}
-                      color={num <= rating ? colors.warning : colors.foregroundSubtle}
-                      fill={num <= rating ? colors.warning : "transparent"}
-                    />
-                  </TouchableOpacity>
-                ))}
-                <Text style={styles.starLabel}>{rating} / 5</Text>
-              </View>
-
-              <Text style={styles.formLabel}>Plug Condition</Text>
-              <View style={styles.conditionRow}>
-                {PLUG_CONDITIONS.map((opt) => {
-                  const active = plugCondition === opt.id;
-                  return (
-                    <TouchableOpacity
-                      key={opt.id}
-                      style={[
-                        styles.conditionChip,
-                        active && styles.conditionChipActive,
-                      ]}
-                      onPress={() => setPlugCondition(opt.id)}
-                      activeOpacity={0.8}
-                    >
-                      <Text
-                        style={[
-                          styles.conditionChipText,
-                          active && styles.conditionChipTextActive,
-                        ]}
-                      >
-                        {opt.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              <Text style={styles.formLabel}>Comment</Text>
-              <TextInput
-                style={[styles.textInput, styles.commentInput]}
-                value={comment}
-                onChangeText={setComment}
-                placeholder="Share charging speed, plug status, or parking tips..."
-                placeholderTextColor={colors.foregroundSubtle}
-                multiline
-                numberOfLines={3}
-                textAlignVertical="top"
-              />
-
-              {submitError ? <Text style={styles.formError}>{submitError}</Text> : null}
-
-              <TouchableOpacity
-                style={[styles.submitBtn, submitting && styles.submitBtnDisabled]}
-                onPress={handleSubmitReview}
-                disabled={submitting}
-                activeOpacity={0.85}
-              >
-                {submitting ? (
-                  <ActivityIndicator size="small" color={colors.accentForeground} />
-                ) : (
-                  <Text style={styles.submitBtnText}>Post Review</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          ) : null}
-
-          {/* Reviews List */}
-          {reviewsLoading && reviews.length === 0 ? (
-            <LoadingState compact message="Loading reviews..." />
-          ) : reviewsError ? (
-            <ErrorState
-              compact
-              title="Couldn't load reviews"
-              message={reviewsError}
-              onRetry={() => loadData(true)}
-            />
-          ) : reviews.length === 0 ? (
-            <EmptyState
-              compact
-              title="No reviews yet"
-              message="Be the first to share your charging experience at this station."
-            />
-          ) : (
-            <View style={styles.reviewsList}>
-              {reviews.map((rev) => (
-                <ReviewCard key={rev.id} review={rev} />
-              ))}
-            </View>
-          )}
-        </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </View>
   );
 };
 
@@ -849,190 +557,5 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     borderWidth: 1,
     borderColor: colors.border,
-  },
-  reviewsHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: spacing.sm,
-  },
-  reviewsSubtitle: {
-    fontSize: 11,
-    color: colors.foregroundSubtle,
-    marginTop: 2,
-  },
-  addReviewToggle: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: colors.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: radius.full,
-  },
-  addReviewToggleText: {
-    fontSize: 12,
-    fontWeight: "900",
-    color: colors.accentForeground,
-  },
-  successBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    backgroundColor: colors.successBg,
-    borderWidth: 1,
-    borderColor: "rgba(16, 185, 129, 0.35)",
-    borderRadius: radius.md,
-    padding: spacing.md,
-  },
-  successBannerText: {
-    flex: 1,
-    fontSize: 12,
-    fontWeight: "700",
-    color: colors.success,
-  },
-  reviewForm: {
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    gap: spacing.sm,
-  },
-  formLabel: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: colors.foregroundMuted,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginTop: 4,
-  },
-  textInput: {
-    backgroundColor: colors.backgroundSecondary,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: colors.foreground,
-  },
-  commentInput: {
-    minHeight: 80,
-  },
-  starsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  starBtn: {
-    padding: 2,
-  },
-  starLabel: {
-    marginLeft: 6,
-    fontSize: 13,
-    fontWeight: "800",
-    color: colors.foreground,
-  },
-  conditionRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  conditionChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: radius.full,
-    backgroundColor: colors.backgroundSecondary,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-  },
-  conditionChipActive: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
-  },
-  conditionChipText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: colors.foregroundMuted,
-  },
-  conditionChipTextActive: {
-    color: colors.accentForeground,
-    fontWeight: "900",
-  },
-  formError: {
-    fontSize: 12,
-    color: colors.destructive,
-    fontWeight: "700",
-  },
-  submitBtn: {
-    marginTop: spacing.xs,
-    backgroundColor: colors.primary,
-    paddingVertical: 12,
-    borderRadius: radius.md,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  submitBtnDisabled: {
-    opacity: 0.6,
-  },
-  submitBtnText: {
-    fontSize: 14,
-    fontWeight: "900",
-    color: colors.accentForeground,
-  },
-  reviewsList: {
-    gap: spacing.sm,
-  },
-  reviewItem: {
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    gap: 6,
-  },
-  reviewItemHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  reviewerName: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: colors.foreground,
-  },
-  reviewStars: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  reviewRatingNum: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: colors.warning,
-  },
-  reviewMetaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  plugBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  plugBadgeText: {
-    fontSize: 11,
-    fontWeight: "700",
-  },
-  reviewDate: {
-    fontSize: 11,
-    color: colors.foregroundSubtle,
-  },
-  reviewComment: {
-    fontSize: 13,
-    color: colors.foregroundMuted,
-    lineHeight: 19,
   },
 });
