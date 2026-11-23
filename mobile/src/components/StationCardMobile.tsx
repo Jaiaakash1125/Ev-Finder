@@ -128,9 +128,9 @@ const StationCardMobileComponent: React.FC<StationCardMobileProps> = ({
         <View style={[styles.statDivider, { backgroundColor: colors.borderSubtle }]} />
 
         <View style={styles.statItem}>
-          <Text style={[styles.statLabel, { color: colors.foregroundSubtle }]}>PORTS</Text>
+          <Text style={[styles.statLabel, { color: colors.foregroundSubtle }]}>TOTAL PORTS</Text>
           <Text style={[styles.statValue, { color: colors.accent }]}>
-            {station.freePorts}/{station.totalPorts} free
+            {station.totalPorts} {station.totalPorts === 1 ? "Port" : "Ports"}
           </Text>
         </View>
 

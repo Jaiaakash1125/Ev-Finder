@@ -210,16 +210,16 @@ export const StationDetailScreen: React.FC<Props> = ({ route, navigation }) => {
         <View style={styles.demoHint}>
           <Info size={14} color={colors.foregroundMuted} />
           <Text style={styles.demoHintText}>
-            Demo data: Port availability, tariff, status, and baseline rating are sample values, not live charger telemetry.
+            Tariff and rating values shown are representative sample data.
           </Text>
         </View>
 
         {/* Key Metrics Grid */}
         <View style={styles.metricsGrid}>
           <View style={styles.metricCard}>
-            <Text style={styles.metricLabel}>PORTS FREE</Text>
+            <Text style={styles.metricLabel}>TOTAL PORTS</Text>
             <Text style={[styles.metricValue, { color: colors.accent }]}>
-              {station.freePorts}/{station.totalPorts}
+              {station.totalPorts} {station.totalPorts === 1 ? "Port" : "Ports"}
             </Text>
           </View>
 

@@ -77,7 +77,7 @@ export const FilterChipsBar: React.FC<FilterChipsBarProps> = ({
               onlyAvailable && styles.boldText,
             ]}
           >
-            🟢 Available Free
+            🟢 Available
           </Text>
         </TouchableOpacity>
 
