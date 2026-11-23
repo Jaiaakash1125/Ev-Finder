@@ -28,7 +28,7 @@ interface LeafletMapViewProps {
   isDark?: boolean;
 }
 
-const MAX_RENDERED_MARKERS = 500;
+const MAX_RENDERED_MARKERS = 2000;
 
 export const LeafletMapView: React.FC<LeafletMapViewProps> = ({
   stations,

@@ -104,7 +104,7 @@ function handleNearbyStations(): void {
     $lat = isset($_GET['lat']) ? (float)$_GET['lat'] : 12.9716;
     $lng = isset($_GET['lng']) ? (float)$_GET['lng'] : 77.5946;
     $radiusKm = isset($_GET['radius_km']) ? (float)$_GET['radius_km'] : (isset($_GET['radius']) ? (float)$_GET['radius'] : 50.0);
-    $limit = isset($_GET['limit']) ? min(max((int)$_GET['limit'], 1), 500) : 100;
+    $limit = isset($_GET['limit']) ? min(max((int)$_GET['limit'], 1), 1000) : 200;
 
     $whereClauses = ['1=1'];
     $params = [
@@ -178,7 +178,7 @@ function handleBoundsStations(): void {
     $minLng = (float)$_GET['min_lng'];
     $maxLat = (float)$_GET['max_lat'];
     $maxLng = (float)$_GET['max_lng'];
-    $limit = isset($_GET['limit']) ? min(max((int)$_GET['limit'], 1), 600) : 200;
+    $limit = isset($_GET['limit']) ? min(max((int)$_GET['limit'], 1), 2500) : 500;
 
     $sql = "SELECT * FROM ev_stations 
             WHERE lat BETWEEN :min_lat AND :max_lat 

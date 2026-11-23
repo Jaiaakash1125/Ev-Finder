@@ -7,4 +7,4 @@ export const API_BASE_URL = (rawUrl && rawUrl.length > 0 ? rawUrl : DEFAULT_API_
   ""
 );
 
-export const API_TIMEOUT_MS = 10000;
+export const API_TIMEOUT_MS = 20000;

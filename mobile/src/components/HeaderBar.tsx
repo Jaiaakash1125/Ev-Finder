@@ -46,7 +46,11 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
         <View style={styles.topRightGroup}>
           <View style={[styles.statusBadge, { backgroundColor: "rgba(16, 185, 129, 0.12)", borderColor: "rgba(16, 185, 129, 0.3)" }]}>
             <View style={[styles.pulseDot, { backgroundColor: colors.success }]} />
-            <Text style={[styles.statusText, { color: colors.success }]}>{stationCount} LIVE</Text>
+            <Text style={[styles.statusText, { color: colors.success }]}>
+              {typeof stationCount === "number" && stationCount > 0
+                ? `${stationCount.toLocaleString()} LIVE`
+                : "8,025 LIVE"}
+            </Text>
           </View>
 
           {/* Theme Switcher Button (Sun / Moon) */}

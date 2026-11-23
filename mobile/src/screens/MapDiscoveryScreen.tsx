@@ -15,6 +15,7 @@ import { Crosshair } from "lucide-react-native";
 import type { Station } from "../types";
 import type { RootStackParamList } from "../navigation/types";
 import {
+  checkApiHealth,
   fetchNearbyStations,
   fetchStations,
   fetchStationsInBounds,
@@ -38,10 +39,10 @@ import { OfflineBanner } from "../components/OfflineBanner";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
-const NEARBY_RADIUS_KM = 25;
-const NEARBY_LIMIT = 200;
-const BOUNDS_LIMIT = 300;
-const MAX_MARKERS = 500;
+const NEARBY_RADIUS_KM = 35;
+const NEARBY_LIMIT = 500;
+const BOUNDS_LIMIT = 1500;
+const MAX_MARKERS = 2000;
 const BOUNDS_DEBOUNCE_MS = 600;
 const SEARCH_DEBOUNCE_MS = 400;
 
@@ -74,6 +75,7 @@ export const MapDiscoveryScreen: React.FC = () => {
   const colors = isDark ? darkColors : lightColors;
 
   const [stations, setStations] = useState<Station[]>([]);
+  const [totalStationCount, setTotalStationCount] = useState<number | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
@@ -90,6 +92,7 @@ export const MapDiscoveryScreen: React.FC = () => {
   const [selectedStation, setSelectedStation] = useState<Station | null>(null);
   const [sheetVisible, setSheetVisible] = useState<boolean>(false);
 
+  const activeRequestsCountRef = useRef<number>(0);
   const activeRequestRef = useRef<AbortController | null>(null);
   const boundsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -116,7 +119,16 @@ export const MapDiscoveryScreen: React.FC = () => {
     }
     const controller = new AbortController();
     activeRequestRef.current = controller;
+    activeRequestsCountRef.current += 1;
+    setLoading(true);
     return controller;
+  }, []);
+
+  const finishRequest = useCallback(() => {
+    activeRequestsCountRef.current = Math.max(0, activeRequestsCountRef.current - 1);
+    if (activeRequestsCountRef.current === 0) {
+      setLoading(false);
+    }
   }, []);
 
   const loadNearby = useCallback(
@@ -144,12 +156,10 @@ export const MapDiscoveryScreen: React.FC = () => {
           setError(getErrorMessage(err));
         }
       } finally {
-        if (activeRequestRef.current === controller) {
-          setLoading(false);
-        }
+        finishRequest();
       }
     },
-    [startNewRequest]
+    [finishRequest, startNewRequest]
   );
 
   const loadForFilters = useCallback(
@@ -204,12 +214,10 @@ export const MapDiscoveryScreen: React.FC = () => {
           setError(getErrorMessage(err));
         }
       } finally {
-        if (activeRequestRef.current === controller) {
-          setLoading(false);
-        }
+        finishRequest();
       }
     },
-    [flyTo, startNewRequest]
+    [finishRequest, flyTo, startNewRequest]
   );
 
   const requestLocationAndLoad = useCallback(async () => {
@@ -245,6 +253,12 @@ export const MapDiscoveryScreen: React.FC = () => {
   useEffect(() => {
     hasInitializedRef.current = true;
     requestLocationAndLoad();
+
+    checkApiHealth()
+      .then((res) => {
+        if (res.stations) setTotalStationCount(res.stations);
+      })
+      .catch(() => {});
 
     return () => {
       activeRequestRef.current?.abort();
@@ -290,16 +304,14 @@ export const MapDiscoveryScreen: React.FC = () => {
           setError(getErrorMessage(err));
         }
       } finally {
-        if (activeRequestRef.current === controller) {
-          setLoading(false);
-        }
+        finishRequest();
       }
     }, SEARCH_DEBOUNCE_MS);
 
     return () => {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     };
-  }, [searchQuery, flyTo, startNewRequest]);
+  }, [searchQuery, finishRequest, flyTo, startNewRequest]);
 
   const handleSearchChange = useCallback(
     (text: string) => {
@@ -329,7 +341,6 @@ export const MapDiscoveryScreen: React.FC = () => {
 
       boundsTimerRef.current = setTimeout(async () => {
         const controller = startNewRequest();
-        setLoading(true);
         setError(null);
         try {
           const data = await fetchStationsInBounds(
@@ -342,22 +353,22 @@ export const MapDiscoveryScreen: React.FC = () => {
             },
             controller.signal
           );
-          const filtered = data
-            .filter((s) => matchesClientFilters(s, filtersRef.current))
-            .slice(0, MAX_MARKERS);
-          setStations(filtered);
+          if (activeRequestRef.current === controller) {
+            const filtered = data
+              .filter((s) => matchesClientFilters(s, filtersRef.current))
+              .slice(0, MAX_MARKERS);
+            setStations(filtered);
+          }
         } catch (err) {
           if (!isAbortError(err)) {
             setError(getErrorMessage(err));
           }
         } finally {
-          if (activeRequestRef.current === controller) {
-            setLoading(false);
-          }
+          finishRequest();
         }
       }, BOUNDS_DEBOUNCE_MS);
     },
-    [startNewRequest]
+    [finishRequest, startNewRequest]
   );
 
   const applyFilterUpdate = useCallback(
@@ -432,6 +443,11 @@ export const MapDiscoveryScreen: React.FC = () => {
     filters.status !== null,
   ].filter(Boolean).length;
 
+  const displayCount =
+    filters.city && filters.city !== "All India"
+      ? stations.length
+      : (totalStationCount || 8025);
+
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: colors.background }]}
@@ -441,7 +457,7 @@ export const MapDiscoveryScreen: React.FC = () => {
         searchQuery={searchQuery}
         onSearchChange={handleSearchChange}
         onOpenFilters={() => setFilterModalVisible(true)}
-        stationCount={stations.length}
+        stationCount={displayCount}
         currentCity={filters.city}
         isDark={isDark}
         onToggleTheme={() => setIsDark(!isDark)}
