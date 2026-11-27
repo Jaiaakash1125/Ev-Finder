@@ -36,7 +36,7 @@ export function SiteChrome({ children }: { children: ReactNode }) {
             <div className="grid size-9 place-items-center rounded-xl charge-button font-display font-black shadow-md shadow-accent/20">
               ⚡
             </div>
-            <span className="font-display text-xl font-extrabold tracking-tight">EvFinder</span>
+            <span className="font-display text-xl font-extrabold tracking-tight">EV Stations India</span>
           </Link>
           <nav
             id="primary-navigation"
@@ -125,7 +125,7 @@ export function SiteChrome({ children }: { children: ReactNode }) {
 
         <footer className="px-6 sm:px-8 lg:px-14 pb-10 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-border pt-8 text-sm text-frost/60">
           <div className="flex items-center gap-3">
-            <span className="font-display font-bold text-foreground">EvFinder India</span>
+            <span className="font-display font-bold text-foreground">EV Stations India</span>
             <span className="text-xs text-frost/50">· OpenStreetMap Powered</span>
             <ThemeToggle className="size-7 rounded-lg text-xs" />
           </div>
@@ -149,7 +149,7 @@ export function SiteChrome({ children }: { children: ReactNode }) {
               Connector Guide
             </Link>
           </div>
-          <span>© 2026 EvFinder Energy</span>
+          <span>© 2026 EV Stations India</span>
         </footer>
       </div>
     </div>

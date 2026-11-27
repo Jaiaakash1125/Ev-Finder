@@ -31,7 +31,7 @@ class RootErrorBoundary extends Component<Props, State> {
       return (
         <View style={errorStyles.container}>
           <Text style={errorStyles.icon}>⚡</Text>
-          <Text style={errorStyles.title}>India EV Finder</Text>
+          <Text style={errorStyles.title}>EV Stations India</Text>
           <Text style={errorStyles.msg}>
             {this.state.error?.message || "An unexpected error occurred while launching."}
           </Text>

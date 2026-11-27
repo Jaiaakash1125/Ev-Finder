@@ -14,8 +14,8 @@ export const Route = createFileRoute("/station/$stationId")({
     meta: [
       {
         title: loaderData
-          ? `${loaderData.name} — ${loaderData.city} EV Charging | EvFinder`
-          : "Station unavailable | EvFinder",
+          ? `${loaderData.name} — ${loaderData.city} EV Charging | EV Stations India`
+          : "Station unavailable | EV Stations India",
       },
       {
         name: "description",
@@ -211,3 +211,4 @@ function StationDetailPage() {
     </SiteChrome>
   );
 }
+

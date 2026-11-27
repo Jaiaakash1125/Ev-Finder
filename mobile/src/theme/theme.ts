@@ -1,5 +1,5 @@
 /**
- * India EV Finder Mobile Theme Tokens
+ * EV Stations India Mobile Theme Tokens
  * Direct 1:1 match with web app CSS variables (Dark Cyber Midnight & Light Arctic Sky)
  */
 
@@ -88,3 +88,4 @@ export const radius = {
   xl: 20,
   full: 9999,
 };
+

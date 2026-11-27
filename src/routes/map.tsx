@@ -45,13 +45,13 @@ export const Route = createFileRoute("/map")({
   }),
   head: () => ({
     meta: [
-      { title: "Live EV Charging Map of India | EvFinder" },
+      { title: "Live EV Charging Map of India | EV Stations India" },
       {
         name: "description",
         content:
           "Interactive open map of 48,200+ EV charging stations across India. Live availability, DC Fast/AC filters, connector speeds, and instant Google Maps GPS navigation.",
       },
-      { property: "og:title", content: "Live EV Charging Map of India | EvFinder" },
+      { property: "og:title", content: "Live EV Charging Map of India | EV Stations India" },
       {
         property: "og:description",
         content:

@@ -1,5 +1,5 @@
 {
-  "name": "india-ev-finder",
+  "name": "ev-stations-india",
   "version": "1.0.0",
   "private": true,
   "sideEffects": false,
@@ -103,3 +103,4 @@
     "vite": "8.1.5"
   }
 }
+

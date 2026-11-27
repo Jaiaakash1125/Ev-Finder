@@ -79,13 +79,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "EvFinder — EV Charging Stations Across India" },
+      { title: "EV Stations India — EV Charging Stations Across India" },
       {
         name: "description",
         content:
           "Find and filter EV charging stations across India with live availability, connector types and pricing.",
       },
-      { property: "og:title", content: "EvFinder — EV Charging Stations Across India" },
+      { property: "og:title", content: "EV Stations India — EV Charging Stations Across India" },
       {
         property: "og:description",
         content:

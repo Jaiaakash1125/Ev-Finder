@@ -11,13 +11,13 @@ import { calculateDistanceKm, getClosestCity, matchesCity } from "../lib/utils";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "EvFinder — EV Charging Stations Across India" },
+      { title: "EV Stations India — EV Charging Stations Across India" },
       {
         name: "description",
         content:
           "Find EV charging stations across India. Search 48,200+ charging points by city, connector, power and live availability with instant Google Maps GPS directions.",
       },
-      { property: "og:title", content: "EvFinder — EV Charging Stations Across India" },
+      { property: "og:title", content: "EV Stations India — EV Charging Stations Across India" },
       {
         property: "og:description",
         content:

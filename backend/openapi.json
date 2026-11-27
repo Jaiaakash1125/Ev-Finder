@@ -1,7 +1,7 @@
 {
   "openapi": "3.0.3",
   "info": {
-    "title": "India EV Finder REST API",
+    "title": "EV Stations India REST API",
     "version": "1.0.0",
     "description": "REST API for station discovery, user authentication, favorites, reviews, reservations, and trip planning for the EV Finder app."
   },

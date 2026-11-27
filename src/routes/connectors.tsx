@@ -5,13 +5,13 @@ import { SiteChrome } from "../components/SiteChrome";
 export const Route = createFileRoute("/connectors")({
   head: () => ({
     meta: [
-      { title: "EV Connector & Plug Guide India | EvFinder" },
+      { title: "EV Connector & Plug Guide India | EV Stations India" },
       {
         name: "description",
         content:
           "Complete visual guide to all EV charging connector types in India: CCS2, Type 2 AC, GB/T Bharat DC-001, LECCS, CHAdeMO, and 15A wall plugs with vehicle compatibility and specs.",
       },
-      { property: "og:title", content: "EV Connector & Plug Guide for India | EvFinder" },
+      { property: "og:title", content: "EV Connector & Plug Guide for India | EV Stations India" },
       {
         property: "og:description",
         content:

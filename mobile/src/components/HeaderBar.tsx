@@ -36,7 +36,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
           </View>
           <View>
             <Text style={[styles.brandTitle, { color: colors.foreground }]}>
-              EV<Text style={{ color: colors.primary }}>FINDER</Text>
+              EV<Text style={{ color: colors.primary }}>STATIONS</Text>
             </Text>
             <Text style={[styles.brandSubtitle, { color: colors.frost }]}>INDIA CHARGING NETWORK</Text>
           </View>

@@ -29,7 +29,7 @@ export const Route = createFileRoute("/stations")({
   }),
   head: () => ({
     meta: [
-      { title: "List View | EV Charging Stations in India | EvFinder" },
+      { title: "List View | EV Charging Stations in India | EV Stations India" },
       {
         name: "description",
         content:
@@ -336,3 +336,4 @@ function StationsPage() {
     </SiteChrome>
   );
 }
+
