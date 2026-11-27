@@ -24,45 +24,103 @@
       "ErrorResponse": {
         "type": "object",
         "properties": {
-          "success": { "type": "boolean", "example": false },
-          "error": { "type": "string", "example": "Station not found" },
-          "details": { "type": "string", "nullable": true }
+          "success": {
+            "type": "boolean",
+            "example": false
+          },
+          "error": {
+            "type": "string",
+            "example": "Station not found"
+          },
+          "details": {
+            "type": "string",
+            "nullable": true
+          }
         },
-        "required": ["success", "error"]
+        "required": [
+          "success",
+          "error"
+        ]
       },
       "Station": {
         "type": "object",
         "properties": {
-          "id": { "type": "string" },
-          "name": { "type": "string" },
-          "network": { "type": "string" },
-          "city": { "type": "string" },
-          "state": { "type": "string" },
-          "address": { "type": "string" },
-          "pincode": { "type": "string" },
-          "lat": { "type": "number" },
-          "lng": { "type": "number" },
-          "distanceKm": { "type": "number", "nullable": true },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "network": {
+            "type": "string"
+          },
+          "city": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "pincode": {
+            "type": "string"
+          },
+          "lat": {
+            "type": "number"
+          },
+          "lng": {
+            "type": "number"
+          },
+          "distanceKm": {
+            "type": "number",
+            "nullable": true
+          },
           "status": {
             "type": "string",
-            "enum": ["available", "limited", "busy", "offline"]
+            "enum": [
+              "available",
+              "limited",
+              "busy",
+              "offline"
+            ]
           },
-          "freePorts": { "type": "integer" },
-          "totalPorts": { "type": "integer" },
+          "freePorts": {
+            "type": "integer"
+          },
+          "totalPorts": {
+            "type": "integer"
+          },
           "connectors": {
             "type": "array",
-            "items": { "type": "string" }
+            "items": {
+              "type": "string"
+            }
           },
-          "maxPowerKw": { "type": "integer" },
-          "pricePerKwh": { "type": "number" },
-          "hours": { "type": "string" },
+          "maxPowerKw": {
+            "type": "integer"
+          },
+          "pricePerKwh": {
+            "type": "number"
+          },
+          "hours": {
+            "type": "string"
+          },
           "amenities": {
             "type": "array",
-            "items": { "type": "string" }
+            "items": {
+              "type": "string"
+            }
           },
-          "rating": { "type": "number" },
-          "reviews": { "type": "integer" },
-          "isFavorite": { "type": "boolean" }
+          "rating": {
+            "type": "number"
+          },
+          "reviews": {
+            "type": "integer"
+          },
+          "isFavorite": {
+            "type": "boolean"
+          }
         },
         "required": [
           "id",
@@ -89,57 +147,117 @@
       "Vehicle": {
         "type": "object",
         "properties": {
-          "id": { "type": "string" },
-          "brand": { "type": "string" },
-          "model": { "type": "string" },
-          "connectorType": { "type": "string" },
-          "batteryKwh": { "type": "number" },
-          "regNumber": { "type": "string", "nullable": true }
+          "id": {
+            "type": "string"
+          },
+          "brand": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "connectorType": {
+            "type": "string"
+          },
+          "batteryKwh": {
+            "type": "number"
+          },
+          "regNumber": {
+            "type": "string",
+            "nullable": true
+          }
         }
       },
       "User": {
         "type": "object",
         "properties": {
-          "id": { "type": "string" },
-          "phone": { "type": "string" },
-          "email": { "type": "string" },
-          "fullName": { "type": "string" },
-          "avatarUrl": { "type": "string" },
+          "id": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "fullName": {
+            "type": "string"
+          },
+          "avatarUrl": {
+            "type": "string"
+          },
           "vehicles": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/Vehicle" }
+            "items": {
+              "$ref": "#/components/schemas/Vehicle"
+            }
           },
           "favorites": {
             "type": "array",
-            "items": { "type": "string" }
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
       "Pagination": {
         "type": "object",
         "properties": {
-          "page": { "type": "integer" },
-          "limit": { "type": "integer" },
-          "total": { "type": "integer" },
-          "totalPages": { "type": "integer" },
-          "hasNextPage": { "type": "boolean" },
-          "hasPreviousPage": { "type": "boolean" }
+          "page": {
+            "type": "integer"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "totalPages": {
+            "type": "integer"
+          },
+          "hasNextPage": {
+            "type": "boolean"
+          },
+          "hasPreviousPage": {
+            "type": "boolean"
+          }
         }
       },
       "Review": {
         "type": "object",
         "properties": {
-          "id": { "type": "string" },
-          "stationId": { "type": "string" },
-          "userId": { "type": "string" },
-          "userName": { "type": "string" },
-          "rating": { "type": "integer", "minimum": 1, "maximum": 5 },
-          "comment": { "type": "string" },
+          "id": {
+            "type": "string"
+          },
+          "stationId": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "userName": {
+            "type": "string"
+          },
+          "rating": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "comment": {
+            "type": "string"
+          },
           "plugCondition": {
             "type": "string",
-            "enum": ["working_perfect", "slow_charge", "broken_connector"]
+            "enum": [
+              "working_perfect",
+              "slow_charge",
+              "broken_connector"
+            ]
           },
-          "createdAt": { "type": "string", "format": "date-time" }
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
         }
       }
     }
@@ -156,9 +274,14 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "phone": { "type": "string", "example": "+919876543210" }
+                  "phone": {
+                    "type": "string",
+                    "example": "+919876543210"
+                  }
                 },
-                "required": ["phone"]
+                "required": [
+                  "phone"
+                ]
               }
             }
           }
@@ -171,14 +294,24 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "success": { "type": "boolean" },
-                    "message": { "type": "string" },
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
                     "data": {
                       "type": "object",
                       "properties": {
-                        "phone": { "type": "string" },
-                        "demoOtp": { "type": "string" },
-                        "expiresInSeconds": { "type": "integer" }
+                        "phone": {
+                          "type": "string"
+                        },
+                        "demoOtp": {
+                          "type": "string"
+                        },
+                        "expiresInSeconds": {
+                          "type": "integer"
+                        }
                       }
                     }
                   }
@@ -202,11 +335,23 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "phone": { "type": "string", "example": "+919876543210" },
-                  "otp": { "type": "string", "example": "123456" },
-                  "fullName": { "type": "string", "example": "Jai Aakash" }
+                  "phone": {
+                    "type": "string",
+                    "example": "+919876543210"
+                  },
+                  "otp": {
+                    "type": "string",
+                    "example": "123456"
+                  },
+                  "fullName": {
+                    "type": "string",
+                    "example": "Jai Aakash"
+                  }
                 },
-                "required": ["phone", "otp"]
+                "required": [
+                  "phone",
+                  "otp"
+                ]
               }
             }
           }
@@ -219,17 +364,27 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "success": { "type": "boolean" },
+                    "success": {
+                      "type": "boolean"
+                    },
                     "data": {
                       "type": "object",
                       "properties": {
-                        "user": { "$ref": "#/components/schemas/User" },
+                        "user": {
+                          "$ref": "#/components/schemas/User"
+                        },
                         "tokens": {
                           "type": "object",
                           "properties": {
-                            "accessToken": { "type": "string" },
-                            "refreshToken": { "type": "string" },
-                            "expiresIn": { "type": "integer" }
+                            "accessToken": {
+                              "type": "string"
+                            },
+                            "refreshToken": {
+                              "type": "string"
+                            },
+                            "expiresIn": {
+                              "type": "integer"
+                            }
                           }
                         }
                       }
@@ -255,9 +410,13 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "refreshToken": { "type": "string" }
+                  "refreshToken": {
+                    "type": "string"
+                  }
                 },
-                "required": ["refreshToken"]
+                "required": [
+                  "refreshToken"
+                ]
               }
             }
           }
@@ -279,48 +438,73 @@
           {
             "name": "page",
             "in": "query",
-            "schema": { "type": "integer", "minimum": 1 },
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
             "example": 1
           },
           {
             "name": "limit",
             "in": "query",
-            "schema": { "type": "integer", "minimum": 1, "maximum": 200 },
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            },
             "example": 20
           },
           {
             "name": "city",
             "in": "query",
-            "schema": { "type": "string" },
+            "schema": {
+              "type": "string"
+            },
             "example": "Bengaluru"
           },
           {
             "name": "network",
             "in": "query",
-            "schema": { "type": "string" },
+            "schema": {
+              "type": "string"
+            },
             "example": "Charge Zone"
           },
           {
             "name": "connector",
             "in": "query",
-            "schema": { "type": "string" },
+            "schema": {
+              "type": "string"
+            },
             "example": "CCS2"
           },
           {
             "name": "min_power_kw",
             "in": "query",
-            "schema": { "type": "integer" },
+            "schema": {
+              "type": "integer"
+            },
             "example": 50
           },
           {
             "name": "status",
             "in": "query",
-            "schema": { "type": "string", "enum": ["available", "limited", "busy", "offline"] }
+            "schema": {
+              "type": "string",
+              "enum": [
+                "available",
+                "limited",
+                "busy",
+                "offline"
+              ]
+            }
           },
           {
             "name": "q",
             "in": "query",
-            "schema": { "type": "string" },
+            "schema": {
+              "type": "string"
+            },
             "description": "Text search across station name, city, address, network, or pincode"
           }
         ],
@@ -332,12 +516,20 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "success": { "type": "boolean" },
-                    "count": { "type": "integer" },
-                    "pagination": { "$ref": "#/components/schemas/Pagination" },
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "count": {
+                      "type": "integer"
+                    },
+                    "pagination": {
+                      "$ref": "#/components/schemas/Pagination"
+                    },
                     "data": {
                       "type": "array",
-                      "items": { "$ref": "#/components/schemas/Station" }
+                      "items": {
+                        "$ref": "#/components/schemas/Station"
+                      }
                     }
                   }
                 }
@@ -355,19 +547,26 @@
             "name": "q",
             "in": "query",
             "required": true,
-            "schema": { "type": "string" },
+            "schema": {
+              "type": "string"
+            },
             "example": "indiranagar"
           },
           {
             "name": "city",
             "in": "query",
-            "schema": { "type": "string" },
+            "schema": {
+              "type": "string"
+            },
             "example": "Bengaluru"
           },
           {
             "name": "limit",
             "in": "query",
-            "schema": { "type": "integer", "maximum": 200 },
+            "schema": {
+              "type": "integer",
+              "maximum": 200
+            },
             "example": 20
           }
         ],
@@ -389,11 +588,17 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "success": { "type": "boolean" },
-                    "count": { "type": "integer" },
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "count": {
+                      "type": "integer"
+                    },
                     "data": {
                       "type": "array",
-                      "items": { "type": "string" }
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   }
                 }
@@ -411,32 +616,68 @@
             "name": "lat",
             "in": "query",
             "required": true,
-            "schema": { "type": "number" },
+            "schema": {
+              "type": "number"
+            },
             "example": 12.9716
           },
           {
             "name": "lng",
             "in": "query",
             "required": true,
-            "schema": { "type": "number" },
+            "schema": {
+              "type": "number"
+            },
             "example": 77.5946
           },
-          { "name": "radius_km", "in": "query", "schema": { "type": "number" }, "example": 10 },
-          { "name": "connector", "in": "query", "schema": { "type": "string" }, "example": "CCS2" },
-          { "name": "min_power_kw", "in": "query", "schema": { "type": "integer" }, "example": 50 },
+          {
+            "name": "radius_km",
+            "in": "query",
+            "schema": {
+              "type": "number"
+            },
+            "example": 10
+          },
+          {
+            "name": "connector",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "example": "CCS2"
+          },
+          {
+            "name": "min_power_kw",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "example": 50
+          },
           {
             "name": "network",
             "in": "query",
-            "schema": { "type": "string" },
+            "schema": {
+              "type": "string"
+            },
             "example": "Charge Zone"
           },
           {
             "name": "status",
             "in": "query",
-            "schema": { "type": "string" },
+            "schema": {
+              "type": "string"
+            },
             "example": "available"
           },
-          { "name": "limit", "in": "query", "schema": { "type": "integer" }, "example": 20 }
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "example": 20
+          }
         ],
         "responses": {
           "200": {
@@ -446,11 +687,17 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "success": { "type": "boolean" },
-                    "count": { "type": "integer" },
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "count": {
+                      "type": "integer"
+                    },
                     "data": {
                       "type": "array",
-                      "items": { "$ref": "#/components/schemas/Station" }
+                      "items": {
+                        "$ref": "#/components/schemas/Station"
+                      }
                     }
                   }
                 }
@@ -464,11 +711,46 @@
       "get": {
         "summary": "Get stations within a map viewport bounding box",
         "parameters": [
-          { "name": "min_lat", "in": "query", "required": true, "schema": { "type": "number" } },
-          { "name": "min_lng", "in": "query", "required": true, "schema": { "type": "number" } },
-          { "name": "max_lat", "in": "query", "required": true, "schema": { "type": "number" } },
-          { "name": "max_lng", "in": "query", "required": true, "schema": { "type": "number" } },
-          { "name": "limit", "in": "query", "schema": { "type": "integer" }, "example": 200 }
+          {
+            "name": "min_lat",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "min_lng",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "max_lat",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "max_lng",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "example": 200
+          }
         ],
         "responses": {
           "200": {
@@ -484,7 +766,14 @@
       "get": {
         "summary": "Get a single station by ID",
         "parameters": [
-          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -494,31 +783,49 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "success": { "type": "boolean" },
+                    "success": {
+                      "type": "boolean"
+                    },
                     "data": {
                       "type": "object",
                       "allOf": [
-                        { "$ref": "#/components/schemas/Station" },
+                        {
+                          "$ref": "#/components/schemas/Station"
+                        },
                         {
                           "type": "object",
                           "properties": {
-                            "isFavorite": { "type": "boolean" },
+                            "isFavorite": {
+                              "type": "boolean"
+                            },
                             "ports": {
                               "type": "array",
                               "items": {
                                 "type": "object",
                                 "properties": {
-                                  "portNumber": { "type": "integer" },
-                                  "connectorType": { "type": "string" },
-                                  "maxPowerKw": { "type": "integer" },
-                                  "status": { "type": "string" },
-                                  "pricePerKwh": { "type": "number" }
+                                  "portNumber": {
+                                    "type": "integer"
+                                  },
+                                  "connectorType": {
+                                    "type": "string"
+                                  },
+                                  "maxPowerKw": {
+                                    "type": "integer"
+                                  },
+                                  "status": {
+                                    "type": "string"
+                                  },
+                                  "pricePerKwh": {
+                                    "type": "number"
+                                  }
                                 }
                               }
                             },
                             "reviews": {
                               "type": "array",
-                              "items": { "$ref": "#/components/schemas/Review" }
+                              "items": {
+                                "$ref": "#/components/schemas/Review"
+                              }
                             }
                           }
                         }
@@ -539,7 +846,14 @@
       "get": {
         "summary": "Get reviews for a station",
         "parameters": [
-          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -549,10 +863,14 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "success": { "type": "boolean" },
+                    "success": {
+                      "type": "boolean"
+                    },
                     "data": {
                       "type": "array",
-                      "items": { "$ref": "#/components/schemas/Review" }
+                      "items": {
+                        "$ref": "#/components/schemas/Review"
+                      }
                     }
                   }
                 }
@@ -563,9 +881,20 @@
       },
       "post": {
         "summary": "Create a station review",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
-          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "requestBody": {
           "required": true,
@@ -574,14 +903,26 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "rating": { "type": "integer", "minimum": 1, "maximum": 5 },
-                  "comment": { "type": "string" },
+                  "rating": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 5
+                  },
+                  "comment": {
+                    "type": "string"
+                  },
                   "plugCondition": {
                     "type": "string",
-                    "enum": ["working_perfect", "slow_charge", "broken_connector"]
+                    "enum": [
+                      "working_perfect",
+                      "slow_charge",
+                      "broken_connector"
+                    ]
                   }
                 },
-                "required": ["rating"]
+                "required": [
+                  "rating"
+                ]
               }
             }
           }
@@ -599,9 +940,20 @@
     "/stations/{id}/reserve": {
       "post": {
         "summary": "Reserve a charging port slot",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
-          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "requestBody": {
           "required": true,
@@ -610,9 +962,15 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "portNumber": { "type": "integer" },
-                  "startTimeMinutesFromNow": { "type": "integer" },
-                  "durationMinutes": { "type": "integer" }
+                  "portNumber": {
+                    "type": "integer"
+                  },
+                  "startTimeMinutesFromNow": {
+                    "type": "integer"
+                  },
+                  "durationMinutes": {
+                    "type": "integer"
+                  }
                 }
               }
             }
@@ -631,7 +989,11 @@
     "/user/profile": {
       "get": {
         "summary": "Get current user profile",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Authenticated user profile",
@@ -640,8 +1002,12 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "success": { "type": "boolean" },
-                    "data": { "$ref": "#/components/schemas/User" }
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/User"
+                    }
                   }
                 }
               }
@@ -651,7 +1017,11 @@
       },
       "put": {
         "summary": "Update current user profile",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -659,9 +1029,15 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "fullName": { "type": "string" },
-                  "email": { "type": "string" },
-                  "avatarUrl": { "type": "string" }
+                  "fullName": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string"
+                  },
+                  "avatarUrl": {
+                    "type": "string"
+                  }
                 }
               }
             }
@@ -677,7 +1053,11 @@
     "/user/vehicles": {
       "get": {
         "summary": "Get user's vehicles",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Vehicle list"
@@ -686,7 +1066,11 @@
       },
       "post": {
         "summary": "Add a vehicle to the user's garage",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -694,13 +1078,28 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "brand": { "type": "string" },
-                  "model": { "type": "string" },
-                  "connectorType": { "type": "string" },
-                  "batteryKwh": { "type": "number" },
-                  "regNumber": { "type": "string" }
+                  "brand": {
+                    "type": "string"
+                  },
+                  "model": {
+                    "type": "string"
+                  },
+                  "connectorType": {
+                    "type": "string"
+                  },
+                  "batteryKwh": {
+                    "type": "number"
+                  },
+                  "regNumber": {
+                    "type": "string"
+                  }
                 },
-                "required": ["brand", "model", "connectorType", "batteryKwh"]
+                "required": [
+                  "brand",
+                  "model",
+                  "connectorType",
+                  "batteryKwh"
+                ]
               }
             }
           }
@@ -715,7 +1114,11 @@
     "/user/favorites": {
       "get": {
         "summary": "Get all favorite stations for the current user",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Favorite stations list"
@@ -726,9 +1129,20 @@
     "/user/favorites/{stationId}": {
       "post": {
         "summary": "Add a station to favorites",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
-          { "name": "stationId", "in": "path", "required": true, "schema": { "type": "string" } }
+          {
+            "name": "stationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -738,9 +1152,20 @@
       },
       "delete": {
         "summary": "Remove a station from favorites",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "parameters": [
-          { "name": "stationId", "in": "path", "required": true, "schema": { "type": "string" } }
+          {
+            "name": "stationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -752,7 +1177,11 @@
     "/bookings/my": {
       "get": {
         "summary": "Get current user's bookings",
-        "security": [{ "BearerAuth": [] }],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Booking list"
@@ -773,29 +1202,52 @@
                   "origin": {
                     "type": "object",
                     "properties": {
-                      "lat": { "type": "number" },
-                      "lng": { "type": "number" }
+                      "lat": {
+                        "type": "number"
+                      },
+                      "lng": {
+                        "type": "number"
+                      }
                     },
-                    "required": ["lat", "lng"]
+                    "required": [
+                      "lat",
+                      "lng"
+                    ]
                   },
                   "destination": {
                     "type": "object",
                     "properties": {
-                      "lat": { "type": "number" },
-                      "lng": { "type": "number" }
+                      "lat": {
+                        "type": "number"
+                      },
+                      "lng": {
+                        "type": "number"
+                      }
                     },
-                    "required": ["lat", "lng"]
+                    "required": [
+                      "lat",
+                      "lng"
+                    ]
                   },
                   "vehicle": {
                     "type": "object",
                     "properties": {
-                      "batteryKwh": { "type": "number" },
-                      "currentSocPercent": { "type": "number" },
-                      "efficiencyKmPerKwh": { "type": "number" }
+                      "batteryKwh": {
+                        "type": "number"
+                      },
+                      "currentSocPercent": {
+                        "type": "number"
+                      },
+                      "efficiencyKmPerKwh": {
+                        "type": "number"
+                      }
                     }
                   }
                 },
-                "required": ["origin", "destination"]
+                "required": [
+                  "origin",
+                  "destination"
+                ]
               }
             }
           }
@@ -821,11 +1273,22 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "status": { "type": "string" },
-                    "service": { "type": "string" },
-                    "version": { "type": "string" },
-                    "totalStationsInDb": { "type": "integer" },
-                    "timestamp": { "type": "string", "format": "date-time" }
+                    "status": {
+                      "type": "string"
+                    },
+                    "service": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "string"
+                    },
+                    "totalStationsInDb": {
+                      "type": "integer"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
                   }
                 }
               }
